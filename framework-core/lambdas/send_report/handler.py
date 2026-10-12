@@ -1,5 +1,5 @@
 """
-TFM Framework — Lambda: SendReport
+TFM Framework - Lambda: SendReport
 Final state: DeliverReport
 Sends the PDF report via Amazon SES (Simple Email Service).
 Attaches the PDF from S3 and sends an HTML email with KPI boxes.
@@ -25,10 +25,10 @@ SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'your-email@example.com')
 def lambda_handler(event, context):
     """
     Input (from Step Functions):
-        event['sector']          — 'energia' or 'telecom'
-        event['pdf_key']         — S3 key of the PDF produced by GeneratePDF
-        event['recipients']      — list of recipient emails (from the YAML)
-        event['stakeholder']     — recipient role label
+        event['sector']          - 'energia' or 'telecom'
+        event['pdf_key']         - S3 key of the PDF produced by GeneratePDF
+        event['recipients']      - list of recipient emails (from the YAML)
+        event['stakeholder']     - recipient role label
         event['runtime']['week']
 
     Output:
@@ -41,7 +41,7 @@ def lambda_handler(event, context):
     recipients = event.get('recipients', [])
 
     if not recipients:
-        print("WARNING: No recipients configured — skipping email send")
+        print("WARNING: No recipients configured - skipping email send")
         return {'status': 'skipped', 'recipient': None, 'message_id': None, 'email_sent': False}
 
     # 1. Download the PDF from the sector bucket
@@ -56,7 +56,7 @@ def lambda_handler(event, context):
 
     # 3. MIME message with the PDF attached
     msg = MIMEMultipart('mixed')
-    msg['Subject'] = f"[TFM] Weekly Executive Report — {sector_label} — Week {week}"
+    msg['Subject'] = f"[TFM] Weekly Executive Report - {sector_label} - Week {week}"
     msg['From'] = SENDER_EMAIL
     msg['To'] = ', '.join(recipients)
     msg.attach(MIMEText(html_body, 'html', 'utf-8'))
@@ -103,7 +103,7 @@ def build_html_email(sector_label, week, stakeholder):
   <tr><td style="padding:26px 32px;">
     <p style="margin:0;color:#374151;font-size:14px;line-height:1.7;">
       The weekly analysis of the <strong>{sector_label}</strong> sector{role} has been completed.
-      The full executive report — with trend analysis, forecast and recommendations —
+      The full executive report, with trend analysis, forecast and recommendations,
       is attached as a PDF.
     </p>
   </td></tr>

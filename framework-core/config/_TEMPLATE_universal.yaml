@@ -1,5 +1,5 @@
 # ==================================================================================
-# TFM PLATFORM FRAMEWORK — UNIVERSAL CONFIGURATION TEMPLATE (Config-as-Code)
+# TFM PLATFORM FRAMEWORK - UNIVERSAL CONFIGURATION TEMPLATE (Config-as-Code)
 # Universidad Europea de Madrid · Clara Khabbazi Manzur
 # ----------------------------------------------------------------------------------
 # ONE ETL engine (etl_engine.py) and 8 GENERIC Lambdas interpret this file.
@@ -61,7 +61,7 @@ data_contract:
   expected_schema:                           # type contract (coercion + validation)
     <id>: int
     <value>: double
-  # INCREMENTAL READ (generic op_read) — enabled with runtime.week_start/week_end.
+  # INCREMENTAL READ (generic op_read) - enabled with runtime.week_start/week_end.
   # Same code for everyone; each sector picks its mode:
   #   by_filename -> files per date: reads ONLY the week's files (saves IO). pattern uses {date}=YYYY-MM-DD.
   #   by_column   -> a single file: reads all and filters the ROWS by the date column (date_col).

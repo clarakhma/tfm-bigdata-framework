@@ -12,27 +12,27 @@ The configuration follows an eleven-layer template (Layer 0 to Layer 10): identi
 
 Each sector bucket is organised as prefixes that map to the Data–Information–Knowledge–Wisdom model:
 
-- `raw/` — ingested source data.
-- `processed/` — the descriptive, cleaned dataset (the dashboard flat table).
-- `ml_input/` — the model-ready dataset.
-- `ml/` — model outputs (predictions, metrics, artifacts).
-- `quality/` — the ETL data-quality reports.
+- `raw/`: ingested source data.
+- `processed/`: the descriptive, cleaned dataset (the dashboard flat table).
+- `ml_input/`: the model-ready dataset.
+- `ml/`: model outputs (predictions, metrics, artifacts).
+- `quality/`: the ETL data-quality reports.
 
 ## Components
 
-- **Amazon S3** — storage for every data layer.
-- **AWS Glue** — the ETL engine. It runs as Python Shell for conventional volumes or PySpark for Big Data, selected from the YAML.
-- **AWS Lambda** — eight generic functions for configuration, validation, metric aggregation, evaluation, narrative generation, PDF creation, report sending and dashboard update.
-- **AWS Step Functions** — orchestrates the workflow; the same definition drives both sectors.
-- **Amazon RDS (PostgreSQL)** or **Amazon Athena** — the analytical layer, chosen per sector.
-- **Amazon QuickSight** — the descriptive dashboard.
-- **Amazon Bedrock (Nova Pro)** — generates the executive report in natural language.
-- **Amazon SES** — delivers the report by email.
+- **Amazon S3**: storage for every data layer.
+- **AWS Glue**: the ETL engine. It runs as Python Shell for conventional volumes or PySpark for Big Data, selected from the YAML.
+- **AWS Lambda**: eight generic functions for configuration, validation, metric aggregation, evaluation, narrative generation, PDF creation, report sending and dashboard update.
+- **AWS Step Functions**: orchestrates the workflow; the same definition drives both sectors.
+- **Amazon RDS (PostgreSQL)** or **Amazon Athena**: the analytical layer, chosen per sector.
+- **Amazon QuickSight**: the descriptive dashboard.
+- **Amazon Bedrock (Nova Pro)**: generates the executive report in natural language.
+- **Amazon SES**: delivers the report by email.
 
 ## The two validation sectors
 
-- **Energy** — daily electricity-consumption forecasting. Conventional scale (~200K rows), Glue Python Shell, RDS as the analytical layer. The model retrains weekly.
-- **Telecommunications** — network-traffic anomaly detection over the Milan grid. Big Data scale (~320M rows), Glue PySpark, Athena as the analytical layer. The model is trained once and reused; the weekly job only scores.
+- **Energy**: daily electricity-consumption forecasting. Conventional scale (~200K rows), Glue Python Shell, RDS as the analytical layer. The model retrains weekly.
+- **Telecommunications**: network-traffic anomaly detection over the Milan grid. Big Data scale (~320M rows), Glue PySpark, Athena as the analytical layer. The model is trained once and reused; the weekly job only scores.
 
 ## Analytical coverage
 

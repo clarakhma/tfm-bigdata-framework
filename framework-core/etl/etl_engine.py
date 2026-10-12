@@ -8,7 +8,7 @@ ENGINE_VERSION = "etl_engine/1.0.0"
 
 
 # ==================================================================================
-#  CONTEXTO — mantiene motor, sesión Spark, stats y config a lo largo de la receta
+#  CONTEXTO - mantiene motor, sesión Spark, stats y config a lo largo de la receta
 # ==================================================================================
 class Ctx:
     def __init__(self, engine, config, spark=None):
@@ -23,7 +23,7 @@ class Ctx:
 
 
 # ==================================================================================
-#  ADAPTADOR — cada primitiva sabe hacerse en pandas Y en Spark (Wrapper Pattern)
+#  ADAPTADOR - cada primitiva sabe hacerse en pandas Y en Spark (Wrapper Pattern)
 # ==================================================================================
 def _nrows(df, ctx):
     return df.count() if ctx.engine == "spark" else len(df)
@@ -70,12 +70,12 @@ def op_read(ctx):
 
     if ctx.engine == "spark":
         from pyspark.sql import functions as F
-        if not has_header:                       # VÍA 1 — texto sin cabecera, mapeo por índice
+        if not has_header:                       # VÍA 1 - texto sin cabecera, mapeo por índice
             raw = ctx.spark.read.option("recursiveFileLookup", recursive).text(src_read)
             sc = F.split(F.col("value"), sep)
             exprs = [sc.getItem(c["index"]).cast(c["type"]).alias(c["name"]) for c in cols]
             df = raw.select(*exprs)
-        else:                                    # VÍA 2 — con cabecera
+        else:                                    # VÍA 2 - con cabecera
             df = (ctx.spark.read.option("header", "true").option("delimiter", sep)
                   .option("recursiveFileLookup", recursive).csv(src_read))
             if cols:
@@ -312,7 +312,7 @@ def op_group_flag(ctx, df, params):
 
 
 def op_flag_outliers(ctx, df, params):
-    """Marca outliers por grupo con la regla robusta Q3 + factor·IQR (NO los elimina — evidencia de calidad).
+    """Marca outliers por grupo con la regla robusta Q3 + factor·IQR (NO los elimina - evidencia de calidad).
     params: group_by, column, factor(3.0), out_col('is_outlier')."""
     gb = params["group_by"]; col = params["column"]; factor = float(params.get("factor", 3.0))
     out = params.get("out_col", "is_outlier")
@@ -586,7 +586,7 @@ STEP_REGISTRY = {
 
 
 # ==================================================================================
-#  INTÉRPRETE — ejecuta la receta declarada en el YAML
+#  INTÉRPRETE - ejecuta la receta declarada en el YAML
 # ==================================================================================
 def run_recipe(ctx, df, steps):
     for st in steps:
@@ -599,7 +599,7 @@ def run_recipe(ctx, df, steps):
 
 
 # ==================================================================================
-#  CALIDAD DE DATOS — informe rico (perfil + bitácora + señales), genérico y por motor
+#  CALIDAD DE DATOS - informe rico (perfil + bitácora + señales), genérico y por motor
 # ==================================================================================
 def _nulls_by_col(ctx, df):
     """Nulos por columna (una sola pasada). Responde: '¿cuántos nulos había en cada columna?'"""
@@ -690,7 +690,7 @@ def save_quality_report(report, quality_uri, sector):
 
 
 # ==================================================================================
-#  MAIN — carga YAML, elige motor, corre la receta ML (y opcionalmente EDA)
+#  MAIN - carga YAML, elige motor, corre la receta ML (y opcionalmente EDA)
 # ==================================================================================
 def load_config(uri):
     import yaml

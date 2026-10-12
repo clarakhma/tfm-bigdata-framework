@@ -13,7 +13,7 @@
 #   bash deploy/build_weasyprint_layer.sh
 # Genera:  deploy/weasyprint-layer.zip
 #
-# NOTA: el pipeline funciona SIN este layer — generate_pdf usa reportlab como
+# NOTA: el pipeline funciona SIN este layer - generate_pdf usa reportlab como
 # respaldo automático. Este layer es solo para el motor WeasyPrint (D20).
 # =============================================================================
 set -euo pipefail

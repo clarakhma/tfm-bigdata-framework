@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-TFM Framework — Generador ÚNICO de políticas IAM de datos (Tier B)
+TFM Framework - Generador ÚNICO de políticas IAM de datos (Tier B)
 ==================================================================
 Universidad Europea de Madrid · Clara Khabbazi Manzur
 
@@ -10,7 +10,7 @@ Un solo archivo, byte-idéntico, que lee `config/sector_{X}.yaml` y EMITE la
 política IAM del rol de datos de ese sector (el rol que las Lambdas del pipeline
 usan para tocar el bucket del sector, Bedrock, SES y su capa analítica).
 
-POR QUÉ ASÍ (argumento de reutilización — SO4)
+POR QUÉ ASÍ (argumento de reutilización - SO4)
 ----------------------------------------------
 IAM es estático: no puede "leer el YAML en runtime" como las Lambdas. Por eso la
 reutilización en IAM se hace en DESPLIEGUE: un mismo generador (este archivo,

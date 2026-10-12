@@ -1,5 +1,5 @@
 # ============================================================
-# TFM — DECLARATIVE recipe for the Energy sector (for etl_engine.py)
+# TFM - DECLARATIVE recipe for the Energy sector (for etl_engine.py)
 # Universidad Europea de Madrid · Clara Khabbazi Manzur
 # ------------------------------------------------------------
 # REORGANIZED by LAYERS following _TEMPLATE_universal.yaml (same 0->10 order).
@@ -13,7 +13,7 @@
 # LAYER 0 · IDENTITY & SEC-OPS   (universal: metadata + dashboard)
 # ==============================================================================
 sector: energia
-display_name: "Sector Energía — Propiedades Comerciales España"
+display_name: "Sector Energía - Propiedades Comerciales España"
 bucket: s3://tfm-energia-ckm-ew1
 region: eu-west-1
 environment: production
@@ -90,7 +90,7 @@ finops:
 # ==============================================================================
 governance:
   data_owner: "Empresa del sector eléctrico español (NDA)"
-  classification: "confidential"          # GDPR — real company data
+  classification: "confidential"          # GDPR - real company data
   quality_uri: s3://tfm-energia-ckm-ew1/quality/
   data_quality_gates:
     - { column: property_id, rule: "not_null" }
@@ -211,7 +211,7 @@ etl:
     - step: group_flag                     # tariff_type (to segment type 1 / type 2 in the dashboard)
       params: { group_by: [property_id], agg_col: period, agg: max, threshold: 3,
                 out_col: tariff_type, labels: { above: "3.0/6.1", below_or_equal: "2.0" } }
-    - step: flag_outliers                  # is_outlier (quality evidence — not removed)
+    - step: flag_outliers                  # is_outlier (quality evidence - not removed)
       params: { group_by: [property_id], column: value_kwh, factor: 3.0, out_col: is_outlier }
     - step: datetime_features
       params: { source: ds, features: [hour, day_of_week, month, is_weekend] }
@@ -307,11 +307,11 @@ executive_reporting:
 
     Write the report with EXACTLY these five sections:
 
-    1. EXECUTIVE SUMMARY — 2-3 sentences: this week's total consumption, number of active properties, the 4-week forecast total, and the net forecast error. State that the portfolio-level forecast is reliable.
-    2. TREND ANALYSIS — did consumption go up or down vs the previous week (use consumo_semana vs consumo_semana_previa), and where the volume concentrates by tariff type. Do NOT attribute the change to temperature; the temperature-consumption relationship varies by property.
-    3. ACTIVE ALERTS — list the properties with high atypical readings this week AND the properties that are declining. For each, say what to check (possible meter fault, activity drop, or a real one-off peak). If none, write "No alerts this week."
-    4. NEXT-4-WEEKS FORECAST — show the forecast BY WEEK (Week 1, 2, 3, 4): first by segment (3.0/6.1 and 2.0), then a table with ALL 14 properties (weekly values) and each property's forecast confidence in plain words (HIGH/MEDIUM/LOW).
-    5. RECOMMENDATIONS — 2-3 concrete, prioritized actions: energy procurement for the 3.0/6.1 segment (use the forecast), technical inspection of declining/anomalous properties, and efficiency measures in the peak-consumption hours (from perfil_horario).
+    1. EXECUTIVE SUMMARY - 2-3 sentences: this week's total consumption, number of active properties, the 4-week forecast total, and the net forecast error. State that the portfolio-level forecast is reliable.
+    2. TREND ANALYSIS - did consumption go up or down vs the previous week (use consumo_semana vs consumo_semana_previa), and where the volume concentrates by tariff type. Do NOT attribute the change to temperature; the temperature-consumption relationship varies by property.
+    3. ACTIVE ALERTS - list the properties with high atypical readings this week AND the properties that are declining. For each, say what to check (possible meter fault, activity drop, or a real one-off peak). If none, write "No alerts this week."
+    4. NEXT-4-WEEKS FORECAST - show the forecast BY WEEK (Week 1, 2, 3, 4): first by segment (3.0/6.1 and 2.0), then a table with ALL 14 properties (weekly values) and each property's forecast confidence in plain words (HIGH/MEDIUM/LOW).
+    5. RECOMMENDATIONS - 2-3 concrete, prioritized actions: energy procurement for the 3.0/6.1 segment (use the forecast), technical inspection of declining/anomalous properties, and efficiency measures in the peak-consumption hours (from perfil_horario).
 
     STRICT RULES:
     - Executive, non-technical language. The reader is a manager, not a data scientist.
@@ -338,10 +338,10 @@ storage:
   dashboard_source: processed/data.parquet     # where the Lambda loads it from (S3)
 
 security:
-  encryption: SSE-KMS                      # GDPR — confidential data; build_policy.py adds KMS permissions
+  encryption: SSE-KMS                      # GDPR - confidential data; build_policy.py adds KMS permissions
   kms_key_alias: alias/tfm-energia-key
   vpc_enabled: true                        # RDS lives in a private subnet (VPC)
   block_public_access: true
-  versioning: true                         # raw/ immutable — supports the audit trail
+  versioning: true                         # raw/ immutable - supports the audit trail
   iam_role: arn:aws:iam::<ACCOUNT_ID>:role/tfm-energia-pipeline-role   # ONLY so build_policy.py derives the account id
   # The IAM POLICY is not written here: it is generated by iam/build_policy.py reading this YAML.

@@ -1,5 +1,5 @@
 """
-TFM Framework — Lambda: ValidateData
+TFM Framework - Lambda: ValidateData
 State 2: ValidateData
 Validates that the source data file(s) exist in S3 and pass basic quality checks.
 Runs BEFORE Glue ETL to fail fast and avoid wasted compute.
@@ -16,16 +16,16 @@ s3 = boto3.client('s3', region_name='eu-west-1')
 def lambda_handler(event, context):
     """
     Input:
-        event['sector']          — 'energia' or 'telecom'
-        event['pipeline']        — pipeline config dict (from LoadConfig)
-        event['runtime']['week'] — ISO week string e.g. '2026-W28'
+        event['sector']          - 'energia' or 'telecom'
+        event['pipeline']        - pipeline config dict (from LoadConfig)
+        event['runtime']['week'] - ISO week string e.g. '2026-W28'
 
     Output:
         {
             'valid': True/False,
             'file_count': int,
             'total_size_mb': float,
-            'errors': [str]      — empty list if valid
+            'errors': [str]      - empty list if valid
         }
 
     Raises:
@@ -34,7 +34,7 @@ def lambda_handler(event, context):
     sector = event['sector']
     pipeline = event['pipeline']
     week = event['runtime']['week']
-    # source_bucket may be 's3://bucket/raw/' — split bucket from any leading prefix
+    # source_bucket may be 's3://bucket/raw/' - split bucket from any leading prefix
     raw = pipeline['source_bucket'].replace('s3://', '').rstrip('/')
     source_bucket = raw.split('/')[0]
     base_prefix = '/'.join(raw.split('/')[1:])          # e.g. 'raw'

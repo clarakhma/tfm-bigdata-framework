@@ -1,5 +1,5 @@
 """
-TFM Framework — Lambda: AggregateMetrics (GENÉRICO / sin lógica de sector)
+TFM Framework - Lambda: AggregateMetrics (GENÉRICO / sin lógica de sector)
 =========================================================================
 State 8: calcula los KPIs del informe. Despacha por MOTOR (rds | athena | csv)
 según `analytics_source.engine` del YAML. Byte-idéntico entre sectores:
@@ -7,7 +7,7 @@ según `analytics_source.engine` del YAML. Byte-idéntico entre sectores:
   telecom  → engine=athena (SQL Athena, inyecta {periodo}/{scope})
 
 OPCIÓN B (17 ago): en energía este Lambda TAMBIÉN materializa la sábana processed/ en RDS
-(reemplazo atómico) antes de consultar — la carga se movió aquí desde el ETL para evitar
+(reemplazo atómico) antes de consultar - la carga se movió aquí desde el ETL para evitar
 el problema de pip/NAT en la VPC (los Lambdas usan layers pre-construidas). Telecom (athena)
 se lo salta.
 
@@ -101,7 +101,7 @@ def lambda_handler(event, context):
             'historico': [], 'alerts': alerts, 'anticipation': a.get('anticipation', {})}
 
 
-# ── Carga de la sábana processed/ → RDS (reemplazo atómico) — solo engine=rds ────
+# ── Carga de la sábana processed/ → RDS (reemplazo atómico) - solo engine=rds ────
 def load_sabana_to_rds(storage, bucket):
     """Lee la sábana processed/ (parquet) y la carga en la tabla del dashboard con
     TRUNCATE + INSERT en UNA transacción (sin hueco). Layers: pandas + pyarrow + psycopg2."""

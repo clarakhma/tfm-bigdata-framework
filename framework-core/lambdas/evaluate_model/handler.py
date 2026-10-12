@@ -1,6 +1,6 @@
 """
-TFM Framework — Lambda: EvaluateModel
-State 6: EvaluateModel (rama de entrenamiento — energía, retrain_weekly=true)
+TFM Framework - Lambda: EvaluateModel
+State 6: EvaluateModel (rama de entrenamiento - energía, retrain_weekly=true)
 Lee el model_metrics.json que dejó el job de forecast (energia_forecast.py) en S3 y
 decide si el modelo se aprueba (gate de calidad).
 
@@ -10,7 +10,7 @@ CRITERIO DE ÉXITO (D70, 3 ago 2026):
   a nivel de PORTAFOLIO (Energy Efficiency Manager), no la precisión horaria de cada
   propiedad. R² mide cuánta variación del consumo capta el modelo (0.92 obtenido). El
   WAPE por propiedad se conserva y se REPORTA como diagnóstico de la dificultad del
-  forecasting granular (transparencia — no se oculta). Sustituye/complementa el umbral
+  forecasting granular (transparencia - no se oculta). Sustituye/complementa el umbral
   WAPE<15% (D52) para el gate de despliegue.
 
 Universidad Europea de Madrid · Clara Khabbazi Manzur

@@ -1,5 +1,5 @@
 """
-TFM Framework — Lambda: UpdateDashboard (State 9)
+TFM Framework - Lambda: UpdateDashboard (State 9)
 Escribe los KPIs agregados a S3 (los lee QuickSight) y, SOLO si el YAML declara un dataset SPICE,
 lanza el refresco (create_ingestion). En Direct Query (telecom) no hay dataset id → se salta el refresco;
 si lo hubiera pero el dataset es Direct Query, el error se captura y el pipeline continúa.

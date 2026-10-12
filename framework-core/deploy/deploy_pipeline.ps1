@@ -1,10 +1,10 @@
 <#
 =============================================================================
- Despliegue del pipeline — TFM Big Data Framework (REUSABLE por sector)
+ Despliegue del pipeline - TFM Big Data Framework (REUSABLE por sector)
 =============================================================================
  MISMO script para los DOS sectores (SO4: reuso por configuración). El sector
  entra por parámetro y decide el rol, los nombres de función, el YAML y la
- State Machine. El código de las Lambdas es idéntico — solo cambia la config.
+ State Machine. El código de las Lambdas es idéntico - solo cambia la config.
 
  Empaqueta y despliega las 8 Lambdas del sector, sube su YAML a S3 y
  crea/actualiza su State Machine. Los estados pesados (ETL, Train, BatchTransform)

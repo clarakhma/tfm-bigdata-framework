@@ -2,8 +2,8 @@
 
 A configurable, event-driven Big Data analytics framework deployed on AWS. The same orchestration and processing core is reused across two sectors with very different data scales and analytical goals, and the sector-specific behaviour is defined entirely through declarative YAML configuration instead of code changes.
 
-- **Energy** — daily electricity-consumption forecasting (conventional scale).
-- **Telecommunications** — network-traffic anomaly detection over the Milan dataset (Big Data scale).
+- **Energy**: daily electricity-consumption forecasting (conventional scale).
+- **Telecommunications**: network-traffic anomaly detection over the Milan dataset (Big Data scale).
 
 The project demonstrates that a single ingestion, transformation, orchestration and reporting core can serve both sectors, while each sector keeps its own configuration, access policies and analytical layer.
 
@@ -43,9 +43,9 @@ The core is the same file in both sectors: the ETL engine, the eight Lambda func
 
 Each sector keeps its own:
 
-- **YAML configuration** — data contract, ETL steps, compute, analytics layer, reporting.
-- **Data-access IAM policies** — generated per sector from the YAML (least privilege).
-- **Analytical layer** — Amazon RDS (PostgreSQL) for energy, Amazon Athena for telecom.
+- **YAML configuration**: data contract, ETL steps, compute, analytics layer, reporting.
+- **Data-access IAM policies**: generated per sector from the YAML (least privilege).
+- **Analytical layer**: Amazon RDS (PostgreSQL) for energy, Amazon Athena for telecom.
 
 ## Deployment overview
 
@@ -58,6 +58,6 @@ Infrastructure is provisioned manually in the AWS console for this project; auto
 
 ## Scope of this repository
 
-Included: the deployment artifacts — ETL engine, Lambda functions, orchestration, IAM and configuration — the public exogenous data, the data-quality reports produced by the ETL, the generated executive reports and the dashboard screenshots.
+Included: the deployment artifacts (ETL engine, Lambda functions, orchestration, IAM and configuration), the public exogenous data, the data-quality reports produced by the ETL, the generated executive reports and the dashboard screenshots.
 
 Not included: the machine-learning model scripts and their outputs, the trained model artifact, and the raw datasets. The telecom raw data is public and referenced in `data/README.md`; the energy consumption data is private (non-disclosure agreement) and is not published.

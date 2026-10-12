@@ -1,5 +1,5 @@
 """
-TFM Framework — Lambda: GenerateNarrative (GENÉRICO / sin lógica de sector)
+TFM Framework - Lambda: GenerateNarrative (GENÉRICO / sin lógica de sector)
 ==========================================================================
 State 12: GenerateNarrative
 Llama a Amazon Bedrock (Nova Pro) para generar el informe ejecutivo.
@@ -13,7 +13,7 @@ COMPLETO (rol, secciones, idioma) vive en el YAML del sector
   2) sustituye los marcadores {kpi_summary}, {ml_results}, {anticipation}, ... por los
      datos reales del pipeline (anti-alucinación: el modelo solo ve estos números),
   3) invoca Bedrock.
-Es idéntico entre sectores porque es DE VERDAD genérico — no porque empaquete los dos
+Es idéntico entre sectores porque es DE VERDAD genérico - no porque empaquete los dos
 prompts. (Corrige la "trampa" anterior de meter ambos sectores en el mismo archivo.)
 
 Universidad Europea de Madrid · Clara Khabbazi Manzur
@@ -28,9 +28,9 @@ bedrock = boto3.client('bedrock-runtime', region_name='eu-west-1')
 def lambda_handler(event, context):
     """
     Input (desde Step Functions):
-        event['prompt_template'] — plantilla de texto del YAML (executive_reporting.prompt_template)
+        event['prompt_template'] - plantilla de texto del YAML (executive_reporting.prompt_template)
         event['kpi_summary'], event['ml_results'], event['historico'], event['anticipation']
-        event['reporting']       — bloque reporting (slm_model, stakeholder, language)
+        event['reporting']       - bloque reporting (slm_model, stakeholder, language)
     Output:
         {'narrative': str, 'model_used': str}
     """

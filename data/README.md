@@ -12,7 +12,7 @@ This folder holds the public reference data the pipeline needs. Large raw datase
 
 > Note: if `milano_grid_centroids.csv` is missing from this folder, copy it from the project configuration bucket (`s3://tfm-config-ckm-ew1/exog/`) or regenerate it from `milano-grid.geojson` (one centroid per polygon).
 
-## Not included — referenced only
+## Not included: referenced only
 
 ### Telecom raw data (public, large)
 

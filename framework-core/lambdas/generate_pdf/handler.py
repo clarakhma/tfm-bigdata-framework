@@ -1,5 +1,5 @@
 """
-TFM Framework — Lambda: GeneratePDF
+TFM Framework - Lambda: GeneratePDF
 State 13: GeneratePDF (runs after GenerateNarrative)
 Builds the weekly executive PDF report:
   - Primary engine: WeasyPrint (HTML/CSS -> PDF), decision D20. Needs the WeasyPrint
@@ -8,7 +8,7 @@ Builds the weekly executive PDF report:
     layer is not present the run still succeeds with a clean reportlab PDF.
   - Trend chart drawn as inline SVG (no matplotlib dependency).
 
-Returns status + pdf_key (the S3 key) — the contract the State Machine's ResultSelector
+Returns status + pdf_key (the S3 key) - the contract the State Machine's ResultSelector
 expects. Universidad Europea de Madrid · Clara Khabbazi Manzur
 """
 
@@ -22,13 +22,13 @@ s3 = boto3.client('s3', region_name='eu-west-1')
 def lambda_handler(event, context):
     """
     Input (from Step Functions):
-        event['sector']        — 'energia' or 'telecom'
-        event['narrative']     — 5-section text from GenerateNarrative
-        event['kpi_summary']   — dict from AggregateMetrics
-        event['ml_results']    — dict from AggregateMetrics
-        event['historico']     — list of last weeks (for the trend chart)
-        event['alerts']        — list from AggregateMetrics
-        event['reporting']     — reporting config (has output_bucket)
+        event['sector']        - 'energia' or 'telecom'
+        event['narrative']     - 5-section text from GenerateNarrative
+        event['kpi_summary']   - dict from AggregateMetrics
+        event['ml_results']    - dict from AggregateMetrics
+        event['historico']     - list of last weeks (for the trend chart)
+        event['alerts']        - list from AggregateMetrics
+        event['reporting']     - reporting config (has output_bucket)
         event['runtime']['week']
 
     Output:
@@ -43,7 +43,7 @@ def lambda_handler(event, context):
     reporting = event.get('reporting', {})
     week = event['runtime']['week']
 
-    # Output location — bucket + key from the reporting config
+    # Output location - bucket + key from the reporting config
     raw = reporting.get('output_bucket', f's3://tfm-{sector}-ckm-ew1/reports/').replace('s3://', '').rstrip('/')
     bucket = raw.split('/')[0]
     base_prefix = '/'.join(raw.split('/')[1:]) or 'reports'
@@ -95,7 +95,7 @@ def make_svg_chart(historico):
     </svg>'''
 
 
-# ── HTML report (WeasyPrint path) — English ───────────────────────────────────
+# ── HTML report (WeasyPrint path) - English ───────────────────────────────────
 def build_html_report(sector, week, narrative, kpi_summary, ml_results, alerts, svg_chart):
     sector_label = sector.title()   # etiqueta genérica (sin rama de sector)
     date_str = datetime.now().strftime("%d %B %Y")
@@ -106,9 +106,9 @@ def build_html_report(sector, week, narrative, kpi_summary, ml_results, alerts, 
                 f'<div class="value">{value}</div></div>')
 
     kpis = "".join([
-        kpi("Total consumption (kWh)", kpi_summary.get('total_consumption_kwh', '—')),
-        kpi("Change vs last week", f"{kpi_summary.get('change_vs_last_week_pct', '—')}%"),
-        kpi("Active alerts", kpi_summary.get('active_alerts', '—')),
+        kpi("Total consumption (kWh)", kpi_summary.get('total_consumption_kwh', '-')),
+        kpi("Change vs last week", f"{kpi_summary.get('change_vs_last_week_pct', '-')}%"),
+        kpi("Active alerts", kpi_summary.get('active_alerts', '-')),
     ])
     chart_block = f'<div class="section-title">Weekly trend</div><div class="chart">{svg_chart}</div>' if svg_chart else ""
 
@@ -131,8 +131,8 @@ def build_html_report(sector, week, narrative, kpi_summary, ml_results, alerts, 
   .footer {{ margin-top: 26px; padding-top: 10px; border-top: 1px solid #E5E7EB; font-size: 8pt; color: #9CA3AF; text-align: center; }}
 </style></head><body>
 <div class="header">
-  <h1>Weekly Executive Report — {sector_label}</h1>
-  <p>Week: {week} &nbsp;|&nbsp; Generated: {date_str} &nbsp;|&nbsp; Model: {ml_results.get('best_model','—')} &nbsp;|&nbsp; TFM · Universidad Europea de Madrid</p>
+  <h1>Weekly Executive Report - {sector_label}</h1>
+  <p>Week: {week} &nbsp;|&nbsp; Generated: {date_str} &nbsp;|&nbsp; Model: {ml_results.get('best_model','-')} &nbsp;|&nbsp; TFM · Universidad Europea de Madrid</p>
 </div>
 <div class="kpi-grid">{kpis}</div>
 {chart_block}
@@ -149,12 +149,12 @@ def render_pdf(html, sector, week, narrative, kpi_summary, ml_results, alerts, h
         from weasyprint import HTML
         return HTML(string=html).write_pdf(), 'weasyprint'
     except Exception as e:
-        print(f"WeasyPrint unavailable ({e}) — falling back to reportlab")
+        print(f"WeasyPrint unavailable ({e}) - falling back to reportlab")
         return build_pdf_reportlab(sector, week, narrative, kpi_summary, ml_results, historico), 'reportlab'
 
 
 def build_pdf_reportlab(sector, week, narrative, kpi_summary, ml_results, historico):
-    """Pure-Python PDF (bundled reportlab). Always available — guarantees the run succeeds."""
+    """Pure-Python PDF (bundled reportlab). Always available - guarantees the run succeeds."""
     import io, re
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import cm
@@ -178,7 +178,7 @@ def build_pdf_reportlab(sector, week, narrative, kpi_summary, ml_results, histor
     date_str = datetime.now().strftime('%d %B %Y')
     head = Table([[Paragraph(f"Weekly Executive Report &mdash; {label}", H1)],
                   [Paragraph(f"Week: {week} &nbsp;|&nbsp; Generated: {date_str} &nbsp;|&nbsp; "
-                             f"Model: {ml_results.get('best_model','—')} &nbsp;|&nbsp; TFM · Universidad Europea de Madrid",
+                             f"Model: {ml_results.get('best_model','-')} &nbsp;|&nbsp; TFM · Universidad Europea de Madrid",
                              ParagraphStyle('h2', parent=SMALL, textColor=colors.HexColor('#C7D2FE'), alignment=0))]],
                  colWidths=[17*cm])
     head.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),NAVY),('LEFTPADDING',(0,0),(-1,-1),12),

@@ -1,8 +1,8 @@
 """
-TFM Framework — Lambda: LoadConfig
+TFM Framework - Lambda: LoadConfig
 State 1: LoadConfig (first state in both pipelines)
 Reads the sector YAML from S3 and returns the full config as a dict.
-This is the ONLY state that differs between sectors — it loads different YAMLs.
+This is the ONLY state that differs between sectors - it loads different YAMLs.
 
 Universidad Europea de Madrid · Clara Khabbazi Manzur
 Key principle: reusability via config (12-Factor App, Principle III)
@@ -17,12 +17,12 @@ s3 = boto3.client('s3', region_name='eu-west-1')
 def lambda_handler(event, context):
     """
     Input:
-        event['sector']        — 'energia' or 'telecom'
-        event['config_bucket'] — S3 bucket where YAML files live
-        event['week']          — ISO week string e.g. '2026-W28'
+        event['sector']        - 'energia' or 'telecom'
+        event['config_bucket'] - S3 bucket where YAML files live
+        event['week']          - ISO week string e.g. '2026-W28'
 
     Output:
-        Full config dict from the YAML — passed downstream to all states
+        Full config dict from the YAML - passed downstream to all states
     """
     sector = event['sector']
     config_bucket = event.get('config_bucket', 'tfm-config-bucket')
