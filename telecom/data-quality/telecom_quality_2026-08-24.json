@@ -1,0 +1,187 @@
+{
+  "engine_version": "etl_engine/1.0.0",
+  "utc_timestamp": "2026-08-24T20:53:27.596881+00:00",
+  "fecha_ejecucion": "2026-08-24",
+  "sector": "telecom",
+  "compute_engine": "spark",
+  "input": {
+    "filas": 319896289,
+    "columnas": 8,
+    "nombres_columnas": [
+      "square_id",
+      "timestamp_ms",
+      "country_code",
+      "sms_in",
+      "sms_out",
+      "call_in",
+      "call_out",
+      "internet"
+    ],
+    "celdas_totales": 2559170312,
+    "celdas_nulas": 928442025,
+    "pct_celdas_nulas": 36.28,
+    "nulos_por_columna": {
+      "square_id": 0,
+      "timestamp_ms": 0,
+      "country_code": 0,
+      "sms_in": 146175906,
+      "sms_out": 219930197,
+      "call_in": 221299761,
+      "call_out": 181821224,
+      "internet": 159214937
+    }
+  },
+  "processed": {
+    "receta": "eda_steps",
+    "pasos": [
+      {
+        "step": "cast_types",
+        "rows": 319896289
+      },
+      {
+        "step": "normalize_time",
+        "rows": 319896289
+      },
+      {
+        "step": "fill_zeros",
+        "rows": 319896289
+      },
+      {
+        "step": "derive_columns",
+        "rows": 319896289
+      },
+      {
+        "step": "write_parquet",
+        "rows": 319896289
+      }
+    ],
+    "senales_calidad": {},
+    "columnas_constantes": [],
+    "salida": {
+      "filas": 319896289,
+      "columnas": 11,
+      "nombres_columnas": [
+        "square_id",
+        "timestamp_ms",
+        "country_code",
+        "sms_in",
+        "sms_out",
+        "call_in",
+        "call_out",
+        "internet",
+        "ds",
+        "total_activity",
+        "periodo"
+      ],
+      "celdas_totales": 3518859179,
+      "celdas_nulas": 0,
+      "pct_celdas_nulas": 0.0,
+      "nulos_por_columna": {
+        "square_id": 0,
+        "timestamp_ms": 0,
+        "country_code": 0,
+        "sms_in": 0,
+        "sms_out": 0,
+        "call_in": 0,
+        "call_out": 0,
+        "internet": 0,
+        "ds": 0,
+        "total_activity": 0,
+        "periodo": 0
+      },
+      "fecha_min": "2013-10-31 23:00:00",
+      "fecha_max": "2014-01-01 22:50:00"
+    }
+  },
+  "ml_input": {
+    "receta": "ml_steps",
+    "pasos": [
+      {
+        "step": "cast_types",
+        "rows": 319896289
+      },
+      {
+        "step": "normalize_time",
+        "rows": 319896289
+      },
+      {
+        "step": "fill_zeros",
+        "rows": 319896289
+      },
+      {
+        "step": "drop_nulls",
+        "rows": 319896289
+      },
+      {
+        "step": "aggregate",
+        "rows": 14877485
+      },
+      {
+        "step": "datetime_features",
+        "rows": 14877485
+      },
+      {
+        "step": "derive_columns",
+        "rows": 14877485
+      },
+      {
+        "step": "write_parquet",
+        "rows": 14877485
+      }
+    ],
+    "senales_calidad": {},
+    "columnas_constantes": [],
+    "salida": {
+      "filas": 14877485,
+      "columnas": 19,
+      "nombres_columnas": [
+        "square_id",
+        "ds",
+        "sms_in",
+        "sms_out",
+        "call_in",
+        "call_out",
+        "internet",
+        "hour",
+        "day_of_week",
+        "is_weekend",
+        "periodo",
+        "total_sms",
+        "total_calls",
+        "total_activity",
+        "sms_ratio",
+        "call_ratio",
+        "internet_to_call_ratio",
+        "hour_sin",
+        "hour_cos"
+      ],
+      "celdas_totales": 282672215,
+      "celdas_nulas": 0,
+      "pct_celdas_nulas": 0.0,
+      "nulos_por_columna": {
+        "square_id": 0,
+        "ds": 0,
+        "sms_in": 0,
+        "sms_out": 0,
+        "call_in": 0,
+        "call_out": 0,
+        "internet": 0,
+        "hour": 0,
+        "day_of_week": 0,
+        "is_weekend": 0,
+        "periodo": 0,
+        "total_sms": 0,
+        "total_calls": 0,
+        "total_activity": 0,
+        "sms_ratio": 0,
+        "call_ratio": 0,
+        "internet_to_call_ratio": 0,
+        "hour_sin": 0,
+        "hour_cos": 0
+      },
+      "fecha_min": "2013-10-31 23:00:00",
+      "fecha_max": "2014-01-01 22:00:00"
+    }
+  },
+  "status": "OK"
+}

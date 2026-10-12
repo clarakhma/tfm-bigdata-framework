@@ -1,0 +1,59 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "S3ConfigRead",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": [
+        "arn:aws:s3:::tfm-config-ckm-ew1/config/sector_energia.yaml",
+        "arn:aws:s3:::tfm-config-ckm-ew1/scripts/*"
+      ]
+    },
+    {
+      "Sid": "S3EnergiaRawRead",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:ListBucket"],
+      "Resource": [
+        "arn:aws:s3:::tfm-energia-ckm-ew1",
+        "arn:aws:s3:::tfm-energia-ckm-ew1/raw/*"
+      ]
+    },
+    {
+      "Sid": "S3EnergiaProcessedWrite",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:ListBucket"],
+      "Resource": [
+        "arn:aws:s3:::tfm-energia-ckm-ew1/processed/*",
+        "arn:aws:s3:::tfm-energia-ckm-ew1/ml_input/*",
+        "arn:aws:s3:::tfm-energia-ckm-ew1/ml/*"
+      ]
+    },
+    {
+      "Sid": "KMSForEncryptedBucket",
+      "Effect": "Allow",
+      "Action": ["kms:Decrypt", "kms:GenerateDataKey", "kms:DescribeKey"],
+      "Resource": "arn:aws:kms:eu-west-1:<ACCOUNT_ID>:key/<KMS_KEY_ID>"
+    },
+    {
+      "Sid": "GlueCatalogWrite",
+      "Effect": "Allow",
+      "Action": [
+        "glue:GetDatabase", "glue:GetTable", "glue:GetTables",
+        "glue:CreateTable", "glue:UpdateTable",
+        "glue:GetPartitions", "glue:BatchCreatePartition"
+      ],
+      "Resource": [
+        "arn:aws:glue:eu-west-1:<ACCOUNT_ID>:catalog",
+        "arn:aws:glue:eu-west-1:<ACCOUNT_ID>:database/energy_db",
+        "arn:aws:glue:eu-west-1:<ACCOUNT_ID>:table/energy_db/*"
+      ]
+    },
+    {
+      "Sid": "CloudWatchLogs",
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+      "Resource": "arn:aws:logs:eu-west-1:<ACCOUNT_ID>:log-group:/aws-glue/*"
+    }
+  ]
+}

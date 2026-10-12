@@ -1,0 +1,47 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "SecretsManagerRDS",
+      "Effect": "Allow",
+      "Action": ["secretsmanager:GetSecretValue"],
+      "Resource": "arn:aws:secretsmanager:eu-west-1:<ACCOUNT_ID>:secret:/tfm/rds/energy*"
+    },
+    {
+      "Sid": "VPCNetworkInterfaceForRDS",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateNetworkInterface",
+        "ec2:DeleteNetworkInterface",
+        "ec2:DescribeNetworkInterfaces",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeVpcs",
+        "ec2:DescribeVpcEndpoints",
+        "ec2:DescribeVpcAttribute",
+        "ec2:DescribeRouteTables",
+        "ec2:DescribeDhcpOptions",
+        "ec2:DescribeAvailabilityZones"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "GlueGetConnection",
+      "Effect": "Allow",
+      "Action": ["glue:GetConnection", "glue:GetConnections"],
+      "Resource": [
+        "arn:aws:glue:eu-west-1:<ACCOUNT_ID>:catalog",
+        "arn:aws:glue:eu-west-1:<ACCOUNT_ID>:connection/*"
+      ]
+    },
+    {
+      "Sid": "S3WheelsAndConfig",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": [
+        "arn:aws:s3:::tfm-config-ckm-ew1/wheels/*",
+        "arn:aws:s3:::tfm-config-ckm-ew1/config/*"
+      ]
+    }
+  ]
+}

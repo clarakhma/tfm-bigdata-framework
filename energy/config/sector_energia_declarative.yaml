@@ -1,0 +1,347 @@
+# ============================================================
+# TFM — DECLARATIVE recipe for the Energy sector (for etl_engine.py)
+# Universidad Europea de Madrid · Clara Khabbazi Manzur
+# ------------------------------------------------------------
+# REORGANIZED by LAYERS following _TEMPLATE_universal.yaml (same 0->10 order).
+# Each block carries "# == LAYER N · <name in the universal> ==" to cross-reference it
+# with the template; BELOW is the REAL KEY the code reads (nothing is renamed).
+# Engine: pandas (python_shell, ~200K rows). Same etl_engine.py as telecom.
+# ============================================================
+
+
+# ==============================================================================
+# LAYER 0 · IDENTITY & SEC-OPS   (universal: metadata + dashboard)
+# ==============================================================================
+sector: energia
+display_name: "Sector Energía — Propiedades Comerciales España"
+bucket: s3://tfm-energia-ckm-ew1
+region: eu-west-1
+environment: production
+
+dashboard:
+  quicksight_dataset_id: "<QUICKSIGHT_DATASET_ID>"   # SPICE dataset -> refreshed via UpdateDashboard
+
+
+# ==============================================================================
+# LAYER 1 · DATA CONTRACT   (universal: data_contract)
+# ==============================================================================
+data_contract:
+  id_column: property_id
+  time_column: ds
+  value_columns: [value_kwh]
+  delimiter: ","
+  required_columns: [property_id, date, value_kwh]
+  # Read format for the generic engine (op_read). has_header=true -> reads/casts BY NAME.
+  file_format:
+    separator: ","
+    has_header: true
+    format_type: csv
+    recursive_lookup: false
+  # Raw CSV schema. With has_header=true the `index` is informative (the engine selects BY
+  # NAME). WARNING: verify these names match the real header of data-energy.csv.
+  positional_columns:
+    - { index: 0, name: date,                        type: string }
+    - { index: 1, name: property_id,                 type: string }
+    - { index: 2, name: value_kwh,                   type: double }
+    - { index: 3, name: method,                      type: string }
+    - { index: 4, name: period,                      type: int }
+    - { index: 5, name: surplus_energy_kwh,          type: double }
+    - { index: 6, name: generation_energy_kwh,       type: double }
+    - { index: 7, name: self_consumption_energy_kwh, type: double }
+  expected_schema:
+    property_id: string
+    value_kwh: double
+    period: int
+  # INCREMENTAL READ (generic op_read): a single CSV -> filters the week's ROWS by the raw
+  # date column. Same code as telecom; here it saves no IO (one file) but keeps the reuse.
+  incremental:
+    mode: by_column
+    date_col: date                               # date column of the raw CSV (index 0)
+
+
+# ==============================================================================
+# LAYER 2 · INFRASTRUCTURE & FIN-OPS   (universal: infrastructure_provisioning)
+#   real keys: pipeline (engine) + scalability (sizing) + finops (cost)
+# ==============================================================================
+# The generic engine (etl_engine.py) detects pandas vs Spark from here.
+pipeline:
+  glue_job_type: python_shell     # energy ~200K rows -> pandas (not big data)
+
+# -- Scalability (energy: small today; scales by config, not by code) --
+scalability:
+  compute: { engine: python_shell, glue_worker_type: G.1X, number_of_workers: 1, max_capacity: 0.0625, auto_scaling: false, timeout_minutes: 30 }
+  # REAL Spark criterion = size (GB) vs node RAM, NOT number of rows. Energy <1 GB -> rarely needs it.
+  scale_up: { ram_upgrade: G.2X, switch_to_spark_gb: 15, engine_if_big: pyspark, workers_if_big: 2, max_workers_limit: 10, subpartition_if_big: [property_id] }
+  storage: { format: parquet, compression: snappy, partition_by: [], subpartition_on_large_scale: [] }  # energy does NOT partition (D39, RDS)
+  # Removed SageMaker because the ML runs offline (Glue Python Shell)
+
+# -- FinOps --
+finops:
+  tags: { Sector: energia, Environment: production, Project: TFM }
+  s3_lifecycle:
+    - { prefix: "quality/", transition_glacier_days: 30 }
+    - { prefix: "tmp/",     expire_days: 7 }
+
+
+# ==============================================================================
+# LAYER 3 · QUALITY GATES   (universal: data_quality_gates)
+#   + LAYER 9 · GOVERNANCE / LINEAGE   (universal: governance)
+#   real key: governance (holds BOTH layers: gates + lineage/owner/drift)
+# ==============================================================================
+governance:
+  data_owner: "Empresa del sector eléctrico español (NDA)"
+  classification: "confidential"          # GDPR — real company data
+  quality_uri: s3://tfm-energia-ckm-ew1/quality/
+  data_quality_gates:
+    - { column: property_id, rule: "not_null" }
+    - { column: value_kwh,   rule: ">= 0" }
+  data_contract_validation: true
+  fault_tolerance: { strategy: quarantine, max_failure_pct: 3 }
+  data_drift: { method: PSI, threshold: 0.2, action: force_retrain }
+  lineage: { track_config_version: true, track_data_snapshot: true }
+
+
+# ==============================================================================
+# LAYER 4 · MULTI-PURPOSE PIPELINE   (universal: eda_pipeline / ml_pipeline)
+#   In the sectors it is NOT its own block: it is EMBEDDED in LAYER 5 (etl.ml_steps /
+#   etl.eda_steps + etl.sampling_rate). See 'etl' below.
+# ==============================================================================
+
+
+# ==============================================================================
+# LAYER 5 · DECLARATIVE ETL   (universal: etl)
+# ==============================================================================
+etl:
+  source:
+    source: s3://tfm-energia-ckm-ew1/raw/data-energy.csv
+    format: csv
+    header: true
+
+  # -- ML RECIPE -> ml_input/ (DAILY grain) -----------------------------
+  # Switched from hourly to DAILY because of the zeros problem (many hours at 0 break MAPE
+  # and hourly forecasting). Features ONLY deterministic per row/entity (calendar,
+  # exogenous daily temperature, tariff, backward lags). The target `y` IMPUTATION is
+  # NOT here -> it is done in energia_forecast.py with Train ONLY (avoids Data Leakage).
+  ml_steps:
+    - step: cast_types
+      params: { types: { value_kwh: double, period: int } }
+
+    - step: string_shorten                # property_id UUID -> XX-XX (readability, D47)
+      params: { column: property_id, prefix: 2, suffix: 2, sep: "-" }
+
+    - step: group_flag                    # tariff_type from max(period) per property (D48)
+      params: { group_by: [property_id], agg_col: period, agg: max, threshold: 3,
+                out_col: tariff_type, labels: { above: "3.0/6.1", below_or_equal: "2.0" } }
+
+    - step: normalize_time                # to DAILY base (floor day)
+      params: { source_col: date, unit: iso, target: ds, floor: day }
+
+    - step: drop_nulls                    # no key -> out (structural, not imputation)
+      params: { columns: [property_id, ds] }
+
+    - step: aggregate                     # sums the hourly consumption -> DAILY consumption per property
+      params: { group_by: [property_id, ds, tariff_type],
+                aggregations: { y: "sum(value_kwh)" } }
+
+    - step: drop_duplicates               # safety net: a single row per property-day
+      params: { keys: [property_id, ds] }
+
+    - step: fill_missing_days             # CONTINUOUS daily series before the lags (leakage-free imputation)
+      params:
+        partition_by: [property_id]
+        order_by: ds
+        value_col: y
+        max_interp_gap: 7                 # <= 7 days (up to a week) -> linear interpolation ; > 7 -> same day of week
+        dow_weeks: 4                      # number of previous weeks of the same weekday to average
+
+    - step: datetime_features             # daily calendar (NO leak). No 'hour'.
+      params: { source: ds, features: [day_of_week, month, week_of_year, is_weekend] }
+
+    - step: add_holiday_flag              # is_holiday by calendar (known in advance)
+      params: { source: ds, out_col: is_holiday,
+                holidays_file: s3://tfm-config-ckm-ew1/exog/madrid_festivos.csv, date_col: date }
+
+    - step: join_reference                # ONLY mean temperature (max/min removed due to multicollinearity)
+      params: { ref_source: s3://tfm-config-ckm-ew1/exog/madrid_meteo_api.csv,
+                left_on: ds, right_on: time, as_date: true,
+                columns: [temperature_2m_mean] }
+
+    - step: add_lags                      # DAILY lags (multiples of 7 -> survive the weekly horizon)
+      params: { partition_by: [property_id], order_by: ds,
+                lags: { lag_7d:  { column: y, periods: 7 },
+                        lag_14d: { column: y, periods: 14 },
+                        lag_21d: { column: y, periods: 21 },
+                        lag_28d: { column: y, periods: 28 } } }
+
+    - step: add_rolling                   # rolling means/std + expanding mean, BACKWARD-looking (shift 7 = survives the week)
+      params:
+        partition_by: [property_id]
+        order_by: ds
+        shift: 7
+        min_periods: 2
+        features:
+          roll_mean_7:    { column: y, window: 7,  agg: mean }
+          roll_std_7:     { column: y, window: 7,  agg: std }
+          roll_mean_14:   { column: y, window: 14, agg: mean }
+          expanding_mean: { column: y, expanding: true, agg: mean }
+
+    - step: drop_nulls                    # removes the first ~28 rows of each property (lags with no history)
+      params: { columns: [lag_28d] }      # lag_28d is the longest -> guarantees valid lags and rolling
+
+    - step: write_parquet                 # energy does NOT partition (D39, RDS not Athena)
+      params: { target: s3://tfm-energia-ckm-ew1/ml_input/, partition_by: [] }
+
+    # NOTE: the initial lag NaNs (first days of each property) are NOT imputed;
+    # the model drops them. The statistical imputation of `y` is in energia_forecast.py (Train).
+    # Each model picks its features from this superset (Prophet: ds/y+regressors; LightGBM: +lags).
+
+  # -- EDA RECIPE -> processed/ (HOURLY grain, descriptive for the dashboard) -----
+  # Keeps the hourly detail and the original name `value_kwh` (NOT renamed to `y`).
+  eda_steps:
+    - step: cast_types
+      params: { types: { value_kwh: double, period: int } }
+    - step: string_shorten
+      params: { column: property_id, prefix: 2, suffix: 2, sep: "-" }
+    - step: normalize_time                # hourly (floor hour) for "at what time do they consume most?"
+      params: { source_col: date, unit: iso, target: ds, floor: hour }
+    - step: fill_zeros                     # solar "not applicable" -> 0 (business rule, D35)
+      params: { columns: [surplus_energy_kwh, generation_energy_kwh, self_consumption_energy_kwh] }
+    - step: flag_and_fill_null             # method NULL = real reading -> is_real_reading=1 + 'real'
+      params: { column: method, flag_col: is_real_reading, fill_value: "real" }
+    - step: group_flag                     # tariff_type (to segment type 1 / type 2 in the dashboard)
+      params: { group_by: [property_id], agg_col: period, agg: max, threshold: 3,
+                out_col: tariff_type, labels: { above: "3.0/6.1", below_or_equal: "2.0" } }
+    - step: flag_outliers                  # is_outlier (quality evidence — not removed)
+      params: { group_by: [property_id], column: value_kwh, factor: 3.0, out_col: is_outlier }
+    - step: datetime_features
+      params: { source: ds, features: [hour, day_of_week, month, is_weekend] }
+    - step: add_holiday_flag              # is_holiday also in processed/ (holiday effect in the dashboard)
+      params: { source: ds, out_col: is_holiday,
+                holidays_file: s3://tfm-config-ckm-ew1/exog/madrid_festivos.csv, date_col: date }
+    - step: join_reference                # DAILY temperature joined by date -> for "consumption vs temperature"
+      params: { ref_source: s3://tfm-config-ckm-ew1/exog/madrid_meteo_api.csv,
+                left_on: ds, right_on: time, as_date: true,
+                columns: [temperature_2m_mean, temperature_2m_max, temperature_2m_min] }
+    - step: write_parquet
+      params: { target: s3://tfm-energia-ckm-ew1/processed/, partition_by: [] }
+    # TEMP (Aug 17): sink_analytics disabled to test the ETL OUTSIDE the VPC.
+    # The processed->RDS load will be done by a Lambda (psycopg2 layer, no pip/NAT). Re-enable later.
+    # - step: sink_analytics
+    #   params: {}
+  sampling_rate: 1.0                       # LAYER 4 (universal): eda_pipeline/ml_pipeline.sampling_rate
+
+
+# ==============================================================================
+# LAYER 6 · ML GOVERNANCE   (universal: ml)
+# ==============================================================================
+ml:
+  task: forecasting
+  retrain_weekly: true                # energy DOES retrain every week (forecasting needs recent data)
+  inference_engine: glue
+  script_artifact_path: s3://tfm-config-ckm-ew1/scripts/energia_forecast.py
+  candidates: [baseline, prophet, sarima, lightgbm, lightgbm_log, holt_winters, ensemble]
+  eval_metric: wape
+  threshold: 0.20                     # EvalGate gate: WAPE < 0.20 (config-driven, supersedes D70 R2)
+  forecast_horizon_weeks: 4             # forecast horizon (4 weeks)
+  model_features_from_train: [statistical_imputation_value_kwh, lags, rolling_means, tariff_type, temperature_join]
+
+
+# ==============================================================================
+# LAYER 7 · KPIs / ANALYTICS   (universal: analytics_source)
+#   The queries/aggregation live HERE; aggregate_metrics has no sector logic.
+#   Feeds the REPORT with numbers as text (Bedrock does not read the dashboard). Engine: RDS.
+# ==============================================================================
+analytics_source:
+  engine: rds                                    # requires the RDS runner in aggregate_metrics
+  database: energy_db
+  table: energy_consumption_hourly
+  model_metrics_key: ml/model_metrics.json       # {ml_results}: net error, portfolio WAPE, per_property
+  forecast_key:      ml/forecast_4semanas.csv     # {forecast_semanal}: forecast per property/day
+  forecast_agg:                                  # how the Lambda summarizes it (28 days -> 4 weeks)
+    date_col: fecha
+    value: prediccion
+    weeks: 4
+    by_property: [property_id, tariff_type]      # the 14 properties x 4 weeks
+    by_segment: tariff_type                      # 3.0/6.1 and 2.0 x 4 weeks
+    reliability: wape                            # -> HIGH/MEDIUM/LOW (translated by the prompt)
+  # {week_start}/{week_end}/{prev_week_start} are injected by the Lambda from the current week
+  kpi_queries:
+    consumo_semana:        "SELECT ROUND(SUM(value_kwh)::numeric,2) FROM energy_consumption_hourly WHERE ds >= '{week_start}' AND ds < '{week_end}'"
+    consumo_semana_previa: "SELECT ROUND(SUM(value_kwh)::numeric,2) FROM energy_consumption_hourly WHERE ds >= '{prev_week_start}' AND ds < '{week_start}'"
+    propiedades_activas:   "SELECT COUNT(DISTINCT property_id) FROM energy_consumption_hourly WHERE ds >= '{week_start}' AND ds < '{week_end}'"
+    consumo_por_tarifa:    "SELECT tariff_type, ROUND(SUM(value_kwh)::numeric,2) AS consumo FROM energy_consumption_hourly WHERE ds >= '{week_start}' AND ds < '{week_end}' GROUP BY tariff_type"
+    perfil_horario:        "SELECT hour, ROUND(AVG(value_kwh)::numeric,3) AS medio FROM energy_consumption_hourly WHERE ds >= '{week_start}' AND ds < '{week_end}' GROUP BY hour ORDER BY medio DESC LIMIT 3"
+  alerts_query:            "SELECT property_id, COUNT(*) AS picos FROM energy_consumption_hourly WHERE ds >= '{week_start}' AND ds < '{week_end}' AND is_outlier=1 GROUP BY property_id ORDER BY picos DESC LIMIT 5"
+  trend_query:             "SELECT property_id, ROUND(((SUM(CASE WHEN ds >= '{week_start}' AND ds < '{week_end}' THEN value_kwh ELSE 0 END) - SUM(CASE WHEN ds >= '{prev_week_start}' AND ds < '{week_start}' THEN value_kwh ELSE 0 END)) / NULLIF(SUM(CASE WHEN ds >= '{prev_week_start}' AND ds < '{week_start}' THEN value_kwh ELSE 0 END),0) * 100)::numeric, 1) AS cambio_pct FROM energy_consumption_hourly WHERE ds >= '{prev_week_start}' AND ds < '{week_end}' GROUP BY property_id ORDER BY cambio_pct ASC LIMIT 5"
+
+
+# ==============================================================================
+# LAYER 8 · REPORTING   (universal: reporting + executive_reporting)
+#   reporting = schedule/recipients/PDF ; executive_reporting = the PROMPT.
+# ==============================================================================
+reporting:
+  schedule: "cron(0 6 ? * MON *)"
+  slm_model: eu.amazon.nova-pro-v1:0
+  stakeholder: "Energy Efficiency Manager"
+  language: en
+  recipients: ["your-email@example.com"]
+  sender: "your-email@example.com"           # SES-verified sender (university email)
+  report_cards:                            # PDF cards (config-driven)
+    - { label: "Consumo semana (kWh)", key: consumo_semana }
+    - { label: "Propiedades activas",  key: propiedades_activas }
+    - { label: "WAPE portafolio (%)",  key: wape_portafolio_pct, source: ml }
+  report_chart: { title: "Tendencia semanal de consumo", x: week, y: consumo_total }
+
+executive_reporting:
+  bedrock_model_id: eu.amazon.nova-pro-v1:0
+  prompt_template: |
+    You are a senior energy analyst writing a weekly executive report for the Energy Efficiency Manager. Respond in English.
+
+    Base the report EXCLUSIVELY on this week's real pipeline data:
+
+    CONSUMPTION KPIs (this week): {kpi_summary}
+    MODEL RESULTS: {ml_results}
+    ANOMALIES (high peaks) and DECLINING properties: {alerts}
+    4-WEEK FORECAST (by segment and by property, per week, with per-property error): {forecast_semanal}
+    LAST 4 WEEKS HISTORY: {historico}
+
+    Write the report with EXACTLY these five sections:
+
+    1. EXECUTIVE SUMMARY — 2-3 sentences: this week's total consumption, number of active properties, the 4-week forecast total, and the net forecast error. State that the portfolio-level forecast is reliable.
+    2. TREND ANALYSIS — did consumption go up or down vs the previous week (use consumo_semana vs consumo_semana_previa), and where the volume concentrates by tariff type. Do NOT attribute the change to temperature; the temperature-consumption relationship varies by property.
+    3. ACTIVE ALERTS — list the properties with high atypical readings this week AND the properties that are declining. For each, say what to check (possible meter fault, activity drop, or a real one-off peak). If none, write "No alerts this week."
+    4. NEXT-4-WEEKS FORECAST — show the forecast BY WEEK (Week 1, 2, 3, 4): first by segment (3.0/6.1 and 2.0), then a table with ALL 14 properties (weekly values) and each property's forecast confidence in plain words (HIGH/MEDIUM/LOW).
+    5. RECOMMENDATIONS — 2-3 concrete, prioritized actions: energy procurement for the 3.0/6.1 segment (use the forecast), technical inspection of declining/anomalous properties, and efficiency measures in the peak-consumption hours (from perfil_horario).
+
+    STRICT RULES:
+    - Executive, non-technical language. The reader is a manager, not a data scientist.
+    - Use EXACTLY the numbers provided; NEVER invent figures or dates.
+    - Do NOT use the word "WAPE" or raw error percentages per property. Translate model reliability to plain words: below 20% = HIGH, 20-35% = MEDIUM, above 35% = LOW.
+    - Do NOT attribute consumption changes to weather.
+    - The peak hours come from the hourly profile (perfil_horario), not from the forecast model.
+    - Be honest: the portfolio forecast is reliable (low net error); a few low-consumption properties are harder to predict individually.
+    - Recipient: {stakeholder}
+
+  stakeholders:
+    - your-email@example.com
+
+
+# ==============================================================================
+# LAYER 10 · STORAGE & SECURITY   (universal: storage + security)
+# ==============================================================================
+storage:
+  analytical: rds
+  database: energy_db
+  port: 5432
+  secret_name: "/tfm/rds/energy"           # pointer to Secrets Manager (NOT the password); read by build_policy.py
+  dashboard_table: energy_consumption_hourly   # the flat table QuickSight reads
+  dashboard_source: processed/data.parquet     # where the Lambda loads it from (S3)
+
+security:
+  encryption: SSE-KMS                      # GDPR — confidential data; build_policy.py adds KMS permissions
+  kms_key_alias: alias/tfm-energia-key
+  vpc_enabled: true                        # RDS lives in a private subnet (VPC)
+  block_public_access: true
+  versioning: true                         # raw/ immutable — supports the audit trail
+  iam_role: arn:aws:iam::<ACCOUNT_ID>:role/tfm-energia-pipeline-role   # ONLY so build_policy.py derives the account id
+  # The IAM POLICY is not written here: it is generated by iam/build_policy.py reading this YAML.

@@ -1,0 +1,101 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "S3ConfigReadOnly",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::tfm-config-ckm-ew1",
+        "arn:aws:s3:::tfm-config-ckm-ew1/*"
+      ]
+    },
+    {
+      "Sid": "S3SectorReadWrite",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::tfm-energia-ckm-ew1",
+        "arn:aws:s3:::tfm-energia-ckm-ew1/*"
+      ]
+    },
+    {
+      "Sid": "BedrockEUInferenceProfile",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:InvokeModel"
+      ],
+      "Resource": [
+        "arn:aws:bedrock:eu-west-1:<ACCOUNT_ID>:inference-profile/eu.amazon.nova-pro-v1:0",
+        "arn:aws:bedrock:*::foundation-model/amazon.nova-pro-v1:0"
+      ]
+    },
+    {
+      "Sid": "SESEmail",
+      "Effect": "Allow",
+      "Action": [
+        "ses:SendEmail",
+        "ses:SendRawEmail"
+      ],
+      "Resource": "arn:aws:ses:eu-west-1:<ACCOUNT_ID>:identity/*"
+    },
+    {
+      "Sid": "CloudWatchLogs",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:eu-west-1:<ACCOUNT_ID>:log-group:/aws/lambda/tfm-*"
+    },
+    {
+      "Sid": "SecretsManagerRDS",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetSecretValue"
+      ],
+      "Resource": "arn:aws:secretsmanager:eu-west-1:<ACCOUNT_ID>:secret:/tfm/rds/energy*"
+    },
+    {
+      "Sid": "VPCNetworkInterfaceForRDS",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateNetworkInterface",
+        "ec2:DescribeNetworkInterfaces",
+        "ec2:DeleteNetworkInterface"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "KMSForEncryptedBucket",
+      "Effect": "Allow",
+      "Action": [
+        "kms:Decrypt",
+        "kms:GenerateDataKey",
+        "kms:DescribeKey"
+      ],
+      "Resource": "arn:aws:kms:eu-west-1:<ACCOUNT_ID>:key/<KMS_KEY_ID>"
+    },
+    {
+      "Sid": "QuickSightSpiceRefresh",
+      "Effect": "Allow",
+      "Action": [
+        "quicksight:CreateIngestion",
+        "quicksight:DescribeIngestion",
+        "quicksight:DescribeDataSet"
+      ],
+      "Resource": [
+        "arn:aws:quicksight:eu-west-1:<ACCOUNT_ID>:dataset/<QUICKSIGHT_DATASET_ID>",
+        "arn:aws:quicksight:eu-west-1:<ACCOUNT_ID>:dataset/<QUICKSIGHT_DATASET_ID>/ingestion/*"
+      ]
+    }
+  ]
+}

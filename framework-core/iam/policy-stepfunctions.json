@@ -1,0 +1,57 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "InvokeLambda",
+      "Effect": "Allow",
+      "Action": ["lambda:InvokeFunction"],
+      "Resource": "arn:aws:lambda:eu-west-1:<ACCOUNT_ID>:function:tfm-*"
+    },
+    {
+      "Sid": "GlueJobControl",
+      "Effect": "Allow",
+      "Action": ["glue:StartJobRun","glue:GetJobRun","glue:GetJobRuns","glue:BatchStopJobRun"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SageMakerJobControl",
+      "Effect": "Allow",
+      "Action": [
+        "sagemaker:CreateTrainingJob","sagemaker:DescribeTrainingJob","sagemaker:StopTrainingJob",
+        "sagemaker:CreateTransformJob","sagemaker:DescribeTransformJob","sagemaker:StopTransformJob",
+        "sagemaker:CreateModel","sagemaker:DescribeModel","sagemaker:DeleteModel",
+        "sagemaker:ListTags"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PassRoleToSageMaker",
+      "Effect": "Allow",
+      "Action": ["iam:PassRole"],
+      "Resource": [
+        "arn:aws:iam::<ACCOUNT_ID>:role/tfm-sagemaker-role"
+      ],
+      "Condition": {
+        "StringEquals": { "iam:PassedToService": "sagemaker.amazonaws.com" }
+      }
+    },
+    {
+      "Sid": "EventBridgeForSyncIntegrations",
+      "Effect": "Allow",
+      "Action": [
+        "events:PutRule","events:PutTargets","events:DescribeRule",
+        "events:DeleteRule","events:RemoveTargets"
+      ],
+      "Resource": "arn:aws:events:eu-west-1:<ACCOUNT_ID>:rule/StepFunctions*"
+    },
+    {
+      "Sid": "ObservabilityAndTracing",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup","logs:CreateLogDelivery","logs:PutLogEvents",
+        "xray:PutTraceSegments","xray:GetSamplingRules","xray:GetSamplingTargets"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

@@ -1,0 +1,340 @@
+# ============================================================
+# TFM — DECLARATIVE recipe for the Telecom sector (for etl_engine.py)
+# Universidad Europea de Madrid · Clara Khabbazi Manzur
+# ------------------------------------------------------------
+# REORGANIZED by LAYERS following _TEMPLATE_universal.yaml (same 0->10 order).
+# Each block carries "# == LAYER N · <name in the universal> ==" to cross-reference it
+# with the template; BELOW is the REAL KEY the code reads (nothing is renamed).
+# Engine: pyspark (Big Data, ~320M rows). Same etl_engine.py as energy.
+# ============================================================
+
+
+# ==============================================================================
+# LAYER 0 · IDENTITY & SEC-OPS   (universal: metadata + dashboard)
+# ==============================================================================
+sector: telecom
+display_name: "Sector Telecomunicaciones — Red de Milán (Telecom Italy)"
+bucket: s3://tfm-telecom-ckm-ew1
+region: eu-west-1
+environment: production
+
+dashboard:
+  quicksight_dataset_id: ""      # Direct Query -> no SPICE refresh. Empty = UpdateDashboard skips create_ingestion.
+                                 # (energy does carry an id because it uses SPICE with a weekly refresh)
+  output_bucket: s3://tfm-telecom-ckm-ew1/dashboard/   # where UpdateDashboard stores the week's kpis.json
+
+
+# ==============================================================================
+# LAYER 1 · DATA CONTRACT   (universal: data_contract)
+#   POSITIONAL schema (headerless TSV -> mapped by index).
+# ==============================================================================
+data_contract:
+  file_format:
+    separator: "\t"
+    has_header: false            # blind plain text -> the engine maps by index (.getItem)
+    format_type: text
+    recursive_lookup: true
+  positional_columns:
+    - { index: 0, name: square_id,    type: int }
+    - { index: 1, name: timestamp_ms, type: long }
+    - { index: 2, name: country_code, type: int }
+    - { index: 3, name: sms_in,       type: double }
+    - { index: 4, name: sms_out,      type: double }
+    - { index: 5, name: call_in,      type: double }
+    - { index: 6, name: call_out,     type: double }
+    - { index: 7, name: internet,     type: double }
+  schema_mapping:
+    id_column: square_id
+    time_column: ds
+    value_column: internet
+    activity_columns: [sms_in, sms_out, call_in, call_out, internet]
+    extra_keys: [country_code]
+  # INCREMENTAL READ (generic op_read): one file per day -> reads ONLY the week's files (saves IO).
+  # Enabled when the runtime carries week_start/week_end (injected by load_config / --week-start/--week-end).
+  incremental:
+    mode: by_filename
+    pattern: "sms-call-internet-mi-{date}.txt"   # {date} = YYYY-MM-DD for each day in the window
+
+
+# ==============================================================================
+# LAYER 2 · INFRASTRUCTURE & FIN-OPS   (universal: infrastructure_provisioning)
+#   real keys: pipeline (engine) + scalability (sizing) + finops (cost)
+# ==============================================================================
+pipeline:
+  glue_job_type: pyspark          # -> the engine picks Spark (320M rows). energy would use python_shell.
+
+# -- Scalability (read by the orchestrator; the script is agnostic) --
+scalability:
+  compute: { engine: pyspark, glue_worker_type: G.2X, number_of_workers: 10, auto_scaling: true }
+  # It is cheaper to add workers and finish fast than to have few that take longer and cost more
+  # (real evidence: 24 DPU 12 min = 4.58 DPU-h vs 4 DPU 2 h = 7.01 DPU-h). auto_scaling adjusts to the volume.
+  bookmark: true    # DECLARED, but NOT effective with etl_engine (native spark.read, not DynamicFrame). The
+                    # real incremental is done by data_contract.incremental (by_filename). Bookmark = future work.
+  storage: { partition_by: [periodo], subpartition_on_large_scale: [square_id] }
+
+# -- FinOps --
+finops:
+  tags: { Sector: telecom, Environment: production, Project: TFM }
+  s3_lifecycle:
+    - { prefix: "quality/", transition_glacier_days: 30 }
+    - { prefix: "tmp/",     expire_days: 7 }
+
+
+# ==============================================================================
+# LAYER 3 · QUALITY GATES   (universal: data_quality_gates)
+#   + LAYER 9 · GOVERNANCE / LINEAGE   (universal: governance)
+#   real key: governance (holds BOTH layers: gates + lineage/owner/drift)
+# ==============================================================================
+governance:
+  data_owner: "Telecom Italia — Barlacchi et al. (2015)"
+  classification: "public-academic"
+  quality_uri: s3://tfm-telecom-ckm-ew1/quality/
+  data_quality_gates:
+    - { column: square_id, rule: "not_null" }
+    - { column: internet,  rule: ">= 0" }
+  data_contract_validation: true
+  fault_tolerance: { strategy: quarantine, max_failure_pct: 3 }   # fault tolerance -> sent to quality
+  data_drift: { method: PSI, threshold: 0.2, action: force_retrain }
+  lineage: { track_config_version: true, track_data_snapshot: true }
+
+
+# ==============================================================================
+# LAYER 4 · MULTI-PURPOSE PIPELINE   (universal: eda_pipeline / ml_pipeline)
+#   In the sectors it is NOT its own block: it is EMBEDDED in LAYER 5 (etl.ml_steps /
+#   etl.eda_steps). See 'etl' below.
+# ==============================================================================
+
+
+# ==============================================================================
+# LAYER 5 · DECLARATIVE ETL   (universal: etl)
+# ==============================================================================
+etl:
+  # Read: the engine uses data_contract.positional_columns + file_format (above). Only the path:
+  source:
+    source: s3://tfm-telecom-ckm-ew1/raw/
+
+  # ---------------------------------------------------------------
+  # ML RECIPE: CLEAN dataset for the model. Only PER-ROW features
+  # (deterministic, no leakage). Lags/rolling-means/imputation -> go
+  # to the ML script (computed with Train only). See score_telecom.py.
+  # ---------------------------------------------------------------
+  ml_steps:
+    - step: cast_types
+      params:
+        types: { square_id: int, timestamp_ms: long, sms_in: double, sms_out: double,
+                 call_in: double, call_out: double, internet: double }
+
+    - step: normalize_time            # timestamp_ms (epoch ms) -> ds; floor hour = hourly grain (stabilizes lags)
+      params: { source_col: timestamp_ms, unit: ms, target: ds, floor: hour }
+
+    - step: fill_zeros                # activity NULL = "no traffic" -> 0 (business rule)
+      params: { columns: [sms_in, sms_out, call_in, call_out, internet] }
+
+    - step: drop_nulls                # removes rows with no key (structural, not imputation)
+      params: { columns: [square_id, ds] }
+
+    - step: aggregate               # groups the six 10-min intervals into 1 hour (op_aggregate)
+      params:
+        group_by: [square_id, ds]
+        aggregations:
+          sms_in: "sum(sms_in)"
+          sms_out: "sum(sms_out)"
+          call_in: "sum(call_in)"
+          call_out: "sum(call_out)"
+          internet: "sum(internet)"
+
+    - step: drop_duplicates           # safety net: a single row per cell-hour
+      params: { keys: [square_id, ds] }
+
+    - step: datetime_features         # hour/day/weekend/period deterministic from ds (NO leak)
+      params: { source: ds, features: [hour, day_of_week, is_weekend, periodo] }
+
+    - step: derive_columns            # Expression Evaluator: per-row formulas (NO leak)
+      params:
+        columns:
+          total_sms: "sms_in + sms_out"
+          total_calls: "call_in + call_out"
+          total_activity: "sms_in + sms_out + call_in + call_out + internet"
+          sms_ratio: "sms_in / (sms_out + 1)"
+          call_ratio: "call_in / (call_out + 1)"
+          internet_to_call_ratio: "internet / (call_in + call_out + 1)"   # avoids false positives
+          hour_sin: "sin(2 * 3.141592 * hour / 24)"
+          hour_cos: "cos(2 * 3.141592 * hour / 24)"
+
+    # NOTE: lag_t24/lag_t168 are NOT here -> computed in score_telecom.py with Train
+    # (backward-looking features; avoid Data Leakage).
+
+    - step: write_parquet
+      params: { target: s3://tfm-telecom-ckm-ew1/ml_input/, partition_by: [periodo] }
+
+  # ---------------------------------------------------------------
+  # EDA RECIPE: descriptive dataset for the dashboard (with country + geo
+  # for maps, without touching the model).
+  # ---------------------------------------------------------------
+  eda_steps:
+    - step: cast_types
+      params:
+        types: { square_id: int, timestamp_ms: long, country_code: int,
+                 sms_in: double, sms_out: double, call_in: double, call_out: double, internet: double }
+
+    - step: normalize_time
+      params: { source_col: timestamp_ms, unit: ms, target: ds }
+
+    - step: fill_zeros
+      params: { columns: [sms_in, sms_out, call_in, call_out, internet] }
+
+    - step: derive_columns
+      params:
+        columns:
+          total_activity: "sms_in + sms_out + call_in + call_out + internet"
+          periodo: "date_format(ds, 'yyyy-MM')"
+
+    # GEO: brings the centroid of each cell (for maps in QuickSight). Requires the Milan grid CSV
+    # (columns: square_id, lat_center, lon_center) at s3://tfm-config-ckm-ew1/exog/milano_grid_centroids.csv
+    - step: join_reference
+      params:
+        ref_source: s3://tfm-config-ckm-ew1/exog/milano_grid_centroids.csv
+        left_on: square_id
+        right_on: square_id
+        columns: [lat_center, lon_center]
+
+    # dist_to_center: haversine distance (km) to the center of Milan (Duomo: 45.4642, 9.1900)
+    - step: derive_columns
+      params:
+        columns:
+          dist_to_center: "6371 * 2 * asin(sqrt(pow(sin(radians((45.4642 - lat_center)/2)),2) + cos(radians(lat_center)) * cos(radians(45.4642)) * pow(sin(radians((9.1900 - lon_center)/2)),2)))"
+
+    - step: drop_duplicates           # a single row per cell-interval-country (original grain)
+      params: { keys: [square_id, timestamp_ms, country_code] }
+
+    - step: write_parquet
+      params: { target: s3://tfm-telecom-ckm-ew1/processed/, partition_by: [periodo] }
+
+
+# ==============================================================================
+# LAYER 6 · ML GOVERNANCE   (universal: ml)
+#   The YAML as a dispatcher: which script and with which config, NOT how to train.
+# ==============================================================================
+ml:
+  task: anomaly_detection
+  retrain_weekly: false             # telecom does NOT retrain: it uses the pre-trained model and only scores
+                                    # (differentiator vs energy, which does retrain). CheckShouldTrain -> jumps to inference.
+  inference_engine: glue
+  script_artifact_path: s3://tfm-config-ckm-ew1/scripts/score_telecom.py   # dynamic dispatch (D67)
+  candidates: [isolation_forest, lof]
+  winner: isolation_forest          # DECIDED in notebook 06: silhouette IF 0.84 vs LOF 0.37; LOF does not scale (O(n^2))
+  selection_metric: silhouette      # + alert rate close to the IQR noise + FinOps tie-break -> IF
+  pca: false                        # TESTED and discarded: it lowers the silhouette (IF 0.84->0.58)
+  # --- Isolation Forest (winning model, what runs in production) ---
+  model: isolation_forest
+  contamination: 0.0567             # Q3 + 3·IQR on total_activity (EXTREME anomalies); from notebook 06
+  contamination_method: "Q3 + 3*IQR"
+  n_estimators: 200
+  max_samples: 256
+  features:                         # 16 model features (X_if from notebook 06)
+    [sms_in, sms_out, call_in, call_out, internet,
+     total_sms, total_calls, total_activity,
+     sms_ratio, call_ratio, internet_to_call_ratio,
+     hour_sin, hour_cos, is_weekend, lag_t24, lag_t168]
+  model_features_from_train: [lag_t24, lag_t168]   # lags computed in Train (NOT in the ETL -> avoids leakage)
+  lof_n_neighbors: 200              # LOF discarded; k documented for the notebook comparison
+  # --- Training / baseline ---
+  baseline_months: [11, 12]         # reference months (Nov+Dec) on which IF is trained
+  train_sample_frac: 0.10           # TRAINS on a sample (~1.5M) that fits in the driver. Training with
+                                    # the 14.6M via .toPandas() causes OOM in the driver. It is EQUIVALENT: IF has
+                                    # max_samples=256 -> each tree already subsamples, it does not need the whole dataset.
+                                    # NOTE: this is ONLY training; the SCORING does score the WHOLE network
+                                    # in a distributed way (pandas_udf), not on the driver.
+  # --- Pre-trained model (SageMaker bootstrap -> loaded by the weekly Glue job, does NOT retrain) ---
+  model_artifact: s3://tfm-telecom-ckm-ew1/ml/model/model.joblib
+  # --- Output (Athena anomalies table) ---
+  output_table: telecom_anomalies
+  output_path: s3://tfm-telecom-ckm-ew1/anomalies/
+  output_partition: periodo
+  model_metrics_key: ml/model-metrics/telecom_model_metrics.json
+
+
+# ==============================================================================
+# LAYER 7 · KPIs / ANALYTICS   (universal: analytics_source)
+#   The query lives HERE; aggregate_metrics has no sector logic. Engine: Athena.
+# ==============================================================================
+analytics_source:
+  engine: athena
+  database: telecom_db
+  athena_results: s3://tfm-telecom-ckm-ew1/athena-results/
+  scope: "periodo IN ('2013-11','2013-12')"
+  model_metrics_key: ml/model-metrics/telecom_model_metrics.json
+  kpi_queries:
+    total_records:   "SELECT COUNT(*) c FROM telecom_anomalies WHERE {scope}"
+    total_anomalies: "SELECT COUNT(*) c FROM telecom_anomalies WHERE {scope} AND is_anomaly=1"
+    top_cells:       "SELECT square_id, COUNT(*) n FROM telecom_anomalies WHERE {scope} AND is_anomaly=1 GROUP BY square_id ORDER BY n DESC LIMIT 5"
+    peak_hours:      "SELECT hour, COUNT(*) n FROM telecom_anomalies WHERE {scope} AND is_anomaly=1 GROUP BY hour ORDER BY n DESC LIMIT 3"
+  alerts_query:      "SELECT square_id, COUNT(*) n FROM telecom_anomalies WHERE {scope} AND is_anomaly=1 GROUP BY square_id ORDER BY n DESC LIMIT 3"
+
+
+# ==============================================================================
+# LAYER 8 · REPORTING   (universal: reporting + executive_reporting)
+#   reporting = schedule/recipients/PDF ; executive_reporting = the PROMPT.
+# ==============================================================================
+reporting:
+  schedule: "cron(0 6 ? * MON *)"   # EventBridge — Monday 06:00
+  output_bucket: s3://tfm-telecom-ckm-ew1/reports/
+  slm_model: eu.amazon.nova-pro-v1:0
+  report_type: analytical_report
+  report_sections:
+    - executive_summary
+    - geographic_distribution
+    - temporal_analysis
+    - critical_cells
+    - recommendations
+  stakeholder: "Analista NOC (Network Operations Center)"
+  language: es
+  recipients:
+    - your-email@example.com
+  sender: "your-email@example.com"           # SES-verified sender (university email)
+  report_cards:
+    - { label: "Registros totales", key: total_records }
+    - { label: "Anomalías totales", key: total_anomalies }
+  report_chart: { title: "Anomalías por semana", x: week, y: total_anomalies }
+
+executive_reporting:
+  bedrock_model_id: eu.amazon.nova-pro-v1:0
+  prompt_template: |
+    **Role:** You are a Senior Network Operations Center (NOC) Analyst for a telecom operator in Milan, Italy. Write a concise, actionable weekly anomaly report for NOC management.
+
+    **Context:** The report analyzes network activity (SMS, calls, internet) across Milan's 10,000-cell grid. Data from the Telecom Italia dataset. Audience: NOC managers who need clear, non-technical insights.
+
+    **Instruction:** Using ONLY the JSON data below, generate a weekly anomaly report with these five sections. Reference the specific KPI names provided. The anomalies come from an Isolation Forest model that flags each cell-hour as anomalous or normal.
+
+    1. **Executive Summary:** (2-3 sentences) total records, total anomalies and anomaly rate (total_anomalies / total_records).
+    2. **Geographic Distribution:** where anomalies concentrate, using `top_cells` (top cell IDs + count).
+    3. **Temporal Analysis:** when anomalies concentrate, using `peak_hours`.
+    4. **Critical Cells:** the top anomalous cells from `top_cells` that the NOC should inspect first.
+    5. **Recommendations:** 2-3 concrete actions for the NOC (e.g., inspect the top cells during the peak hours, check for congestion or outages). Be realistic; do not overstate.
+
+    **Format:** English, executive tone, no jargon, round numbers. Do NOT invent causes or figures not present in the data. Do NOT mention events, matches or concerts.
+
+    **Input Data (JSON):**
+    kpi_summary: {kpi_summary}
+    ml_results: {ml_results}
+  stakeholders:
+    - your-email@example.com
+
+
+# ==============================================================================
+# LAYER 10 · STORAGE & SECURITY   (universal: storage + security)
+# ==============================================================================
+storage:
+  analytical: athena                # serverless SQL — pay per query, no idle cost
+  database: telecom_db
+  table: telecom_traffic
+  athena_results: s3://tfm-telecom-ckm-ew1/athena-results/
+
+security:
+  encryption: SSE-S3                # public academic dataset — standard encryption is enough
+  vpc_enabled: false                # Athena is serverless — no VPC
+  block_public_access: true
+  versioning: true                  # raw/ immutable — supports the audit trail
+  iam_role: arn:aws:iam::<ACCOUNT_ID>:role/tfm-telecom-pipeline-role   # ONLY so build_policy.py derives the account id
+  # No Secrets Manager: Athena uses the IAM role, no credentials required.
+  # The IAM POLICY is not written here: it is generated by iam/build_policy.py reading this YAML.

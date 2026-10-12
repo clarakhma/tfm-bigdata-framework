@@ -1,0 +1,18 @@
+# Python cache and environments
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# Credentials / secrets (never commit)
+*.pem
+*.key
+.env
+.aws/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini

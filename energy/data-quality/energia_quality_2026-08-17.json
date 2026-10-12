@@ -1,0 +1,249 @@
+{
+  "engine_version": "etl_engine/1.0.0",
+  "utc_timestamp": "2026-08-17T13:13:42.543799+00:00",
+  "fecha_ejecucion": "2026-08-17",
+  "sector": "energia",
+  "compute_engine": "pandas",
+  "input": {
+    "filas": 206563,
+    "columnas": 8,
+    "nombres_columnas": [
+      "date",
+      "property_id",
+      "value_kwh",
+      "method",
+      "period",
+      "surplus_energy_kwh",
+      "generation_energy_kwh",
+      "self_consumption_energy_kwh"
+    ],
+    "celdas_totales": 1652504,
+    "celdas_nulas": 615261,
+    "pct_celdas_nulas": 37.23,
+    "nulos_por_columna": {
+      "date": 0,
+      "property_id": 0,
+      "value_kwh": 0,
+      "method": 0,
+      "period": 0,
+      "surplus_energy_kwh": 202135,
+      "generation_energy_kwh": 206563,
+      "self_consumption_energy_kwh": 206563
+    },
+    "entidades_unicas": 14,
+    "pct_valor_cero": 3.86
+  },
+  "processed": {
+    "receta": "eda_steps",
+    "pasos": [
+      {
+        "step": "cast_types",
+        "rows": 206563
+      },
+      {
+        "step": "string_shorten",
+        "rows": 206563
+      },
+      {
+        "step": "normalize_time",
+        "rows": 206563
+      },
+      {
+        "step": "fill_zeros",
+        "rows": 206563
+      },
+      {
+        "step": "flag_and_fill_null",
+        "rows": 206563
+      },
+      {
+        "step": "group_flag",
+        "rows": 206563
+      },
+      {
+        "step": "flag_outliers",
+        "rows": 206563
+      },
+      {
+        "step": "datetime_features",
+        "rows": 206563
+      },
+      {
+        "step": "add_holiday_flag",
+        "rows": 206563
+      },
+      {
+        "step": "join_reference",
+        "rows": 206563
+      },
+      {
+        "step": "write_parquet",
+        "rows": 206563
+      }
+    ],
+    "senales_calidad": {
+      "outliers_marcados": 8100,
+      "lecturas_reales": 191613,
+      "filas_festivo": 6816
+    },
+    "columnas_constantes": [
+      "method",
+      "generation_energy_kwh",
+      "self_consumption_energy_kwh"
+    ],
+    "salida": {
+      "filas": 206563,
+      "columnas": 20,
+      "nombres_columnas": [
+        "date",
+        "property_id",
+        "value_kwh",
+        "method",
+        "period",
+        "surplus_energy_kwh",
+        "generation_energy_kwh",
+        "self_consumption_energy_kwh",
+        "ds",
+        "is_real_reading",
+        "tariff_type",
+        "is_outlier",
+        "hour",
+        "day_of_week",
+        "month",
+        "is_weekend",
+        "is_holiday",
+        "temperature_2m_mean",
+        "temperature_2m_max",
+        "temperature_2m_min"
+      ],
+      "celdas_totales": 4131260,
+      "celdas_nulas": 0,
+      "pct_celdas_nulas": 0.0,
+      "nulos_por_columna": {
+        "date": 0,
+        "property_id": 0,
+        "value_kwh": 0,
+        "method": 0,
+        "period": 0,
+        "surplus_energy_kwh": 0,
+        "generation_energy_kwh": 0,
+        "self_consumption_energy_kwh": 0,
+        "ds": 0,
+        "is_real_reading": 0,
+        "tariff_type": 0,
+        "is_outlier": 0,
+        "hour": 0,
+        "day_of_week": 0,
+        "month": 0,
+        "is_weekend": 0,
+        "is_holiday": 0,
+        "temperature_2m_mean": 0,
+        "temperature_2m_max": 0,
+        "temperature_2m_min": 0
+      },
+      "entidades_unicas": 14,
+      "fecha_min": "2023-12-01 00:00:00",
+      "fecha_max": "2026-05-14 23:00:00",
+      "pct_valor_cero": 3.86
+    }
+  },
+  "ml_input": {
+    "receta": "ml_steps",
+    "pasos": [
+      {
+        "step": "cast_types",
+        "rows": 206563
+      },
+      {
+        "step": "string_shorten",
+        "rows": 206563
+      },
+      {
+        "step": "group_flag",
+        "rows": 206563
+      },
+      {
+        "step": "normalize_time",
+        "rows": 206563
+      },
+      {
+        "step": "drop_nulls",
+        "rows": 206563
+      },
+      {
+        "step": "aggregate",
+        "rows": 8609
+      },
+      {
+        "step": "datetime_features",
+        "rows": 8609
+      },
+      {
+        "step": "add_holiday_flag",
+        "rows": 8609
+      },
+      {
+        "step": "join_reference",
+        "rows": 8609
+      },
+      {
+        "step": "add_lags",
+        "rows": 8609
+      },
+      {
+        "step": "write_parquet",
+        "rows": 8609
+      }
+    ],
+    "senales_calidad": {
+      "filas_festivo": 284
+    },
+    "columnas_constantes": [],
+    "salida": {
+      "filas": 8609,
+      "columnas": 15,
+      "nombres_columnas": [
+        "property_id",
+        "ds",
+        "tariff_type",
+        "y",
+        "day_of_week",
+        "month",
+        "week_of_year",
+        "is_weekend",
+        "is_holiday",
+        "temperature_2m_mean",
+        "temperature_2m_max",
+        "temperature_2m_min",
+        "lag_1d",
+        "lag_7d",
+        "lag_28d"
+      ],
+      "celdas_totales": 129135,
+      "celdas_nulas": 504,
+      "pct_celdas_nulas": 0.39,
+      "nulos_por_columna": {
+        "property_id": 0,
+        "ds": 0,
+        "tariff_type": 0,
+        "y": 0,
+        "day_of_week": 0,
+        "month": 0,
+        "week_of_year": 0,
+        "is_weekend": 0,
+        "is_holiday": 0,
+        "temperature_2m_mean": 0,
+        "temperature_2m_max": 0,
+        "temperature_2m_min": 0,
+        "lag_1d": 14,
+        "lag_7d": 98,
+        "lag_28d": 392
+      },
+      "entidades_unicas": 14,
+      "fecha_min": "2023-12-01 00:00:00",
+      "fecha_max": "2026-05-14 00:00:00",
+      "pct_valor_cero": 0.44
+    }
+  },
+  "status": "OK"
+}

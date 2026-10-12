@@ -1,0 +1,438 @@
+{
+  "Comment": "TFM Framework — Single parametrized State Machine. Deployed twice: tfm-pipeline-energia and tfm-pipeline-telecom. ONLY the execution input differs: {sector, week}. This proves SO4: same code, two sectors. Universidad Europea de Madrid · Clara Khabbazi Manzur",
+  "StartAt": "LoadConfig",
+  "States": {
+    "LoadConfig": {
+      "Type": "Task",
+      "Comment": "State 1 — Lambda. Reads sector YAML from S3 (tfm-config-ckm-ew1). Returns full config dict. Sector comes from execution input, not hardcoded.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName.$": "States.Format('arn:aws:lambda:eu-west-1:<ACCOUNT_ID>:function:tfm-{}-load-config', $$.Execution.Input.sector)",
+        "Payload": {
+          "sector.$": "$$.Execution.Input.sector",
+          "config_bucket": "tfm-config-ckm-ew1",
+          "week.$": "$$.Execution.Input.week"
+        }
+      },
+      "ResultSelector": {
+        "sector.$": "$.Payload.sector",
+        "region.$": "$.Payload.region",
+        "bucket.$": "$.Payload.bucket",
+        "pipeline.$": "$.Payload.pipeline",
+        "ml.$": "$.Payload.ml",
+        "storage.$": "$.Payload.storage",
+        "dashboard.$": "$.Payload.dashboard",
+        "reporting.$": "$.Payload.reporting",
+        "security.$": "$.Payload.security",
+        "runtime.$": "$.Payload.runtime",
+        "executive_reporting.$": "$.Payload.executive_reporting",
+        "analytics_source.$": "$.Payload.analytics_source",
+        "etl.$": "$.Payload.etl",
+        "governance.$": "$.Payload.governance"
+      },
+      "ResultPath": "$.config",
+      "Next": "ValidateData",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException"
+          ],
+          "IntervalSeconds": 30,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "PipelineFailed"
+        }
+      ]
+    },
+    "ValidateData": {
+      "Type": "Task",
+      "Comment": "State 2 — Lambda. Verifies that this week's raw data file exists in S3. Energia: CSV 200K rows. Telecom: TSV 60M rows.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName.$": "States.Format('arn:aws:lambda:eu-west-1:<ACCOUNT_ID>:function:tfm-{}-validate-data', $$.Execution.Input.sector)",
+        "Payload": {
+          "sector.$": "$$.Execution.Input.sector",
+          "etl.$": "$.config.etl",
+          "governance.$": "$.config.governance",
+          "runtime.$": "$.config.runtime"
+        }
+      },
+      "ResultSelector": {
+        "valid.$": "$.Payload.valid"
+      },
+      "ResultPath": "$.validation",
+      "Next": "RunETL",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException"
+          ],
+          "IntervalSeconds": 60,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "PipelineFailed"
+        }
+      ]
+    },
+    "RunETL": {
+      "Type": "Task",
+      "Comment": "State 3 — Glue ETL real (etl_engine.py). Pasa --config (YAML del sector) y --recipe both (eda+ml).",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName.$": "States.Format('etl_{}.py', $$.Execution.Input.sector)",
+        "Arguments": {
+          "--config.$": "States.Format('s3://tfm-config-ckm-ew1/config/sector_{}_declarative.yaml', $$.Execution.Input.sector)",
+          "--recipe": "both",
+          "--week-start.$": "$.config.runtime.week_start",
+          "--week-end.$": "$.config.runtime.week_end"
+        }
+      },
+      "ResultPath": "$.etl_result",
+      "Next": "CheckShouldTrain",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Glue.ConcurrentRunsExceededException"
+          ],
+          "IntervalSeconds": 30,
+          "MaxAttempts": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "PipelineFailed",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    "CheckShouldTrain": {
+      "Type": "Choice",
+      "Comment": "State 4 — Choice. KEY DIFFERENCE between sectors. Energia: retrain_weekly=true → TrainModel every week. Telecom: retrain_weekly=false → uses pre-trained model, goes directly to BatchTransform.",
+      "Choices": [
+        {
+          "Variable": "$.config.ml.retrain_weekly",
+          "BooleanEquals": true,
+          "Next": "TrainModel"
+        }
+      ],
+      "Default": "InferenceRouter"
+    },
+    "TrainModel": {
+      "Type": "Task",
+      "Comment": "State 5 — Entrenamiento REAL (energia). Glue Python Shell energia_forecast.py: ensemble por propiedad, escribe predicciones + model_metrics.json. (D69)",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "energia_forecast.py",
+        "Arguments": {
+          "--config.$": "States.Format('s3://tfm-config-ckm-ew1/config/sector_{}_declarative.yaml', $$.Execution.Input.sector)"
+        }
+      },
+      "ResultPath": "$.training_result",
+      "Next": "EvaluateModel",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Glue.ConcurrentRunsExceededException"
+          ],
+          "IntervalSeconds": 30,
+          "MaxAttempts": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "PipelineFailed",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    "EvaluateModel": {
+      "Type": "Task",
+      "Comment": "State 6 — Lambda. Gate config-driven desde el YAML (ml.eval_metric/threshold). Energia: WAPE<0.20; telecom: recall>=0.80. Devuelve approved + métricas de portafolio.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName.$": "States.Format('arn:aws:lambda:eu-west-1:<ACCOUNT_ID>:function:tfm-{}-evaluate-model', $$.Execution.Input.sector)",
+        "Payload": {
+          "sector.$": "$$.Execution.Input.sector",
+          "training_result.$": "$.training_result",
+          "ml_config.$": "$.config.ml"
+        }
+      },
+      "ResultSelector": {
+        "best_model.$": "$.Payload.best_model",
+        "approved.$": "$.Payload.approved",
+        "eval_metric.$": "$.Payload.eval_metric",
+        "metric_value.$": "$.Payload.metric_value",
+        "wape_portafolio_pct.$": "$.Payload.wape_portafolio_pct",
+        "r2_portafolio.$": "$.Payload.r2_portafolio",
+        "error_neto_total_pct.$": "$.Payload.error_neto_total_pct"
+      },
+      "ResultPath": "$.ml_results",
+      "Next": "EvalGate",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "PipelineFailed"
+        }
+      ]
+    },
+    "EvalGate": {
+      "Type": "Choice",
+      "Comment": "State 7 — Choice. Quality gate. If approved=true (model meets threshold), continue to CreateModel. If approved=false, fail the pipeline — do not deploy a bad model.",
+      "Choices": [
+        {
+          "Variable": "$.ml_results.approved",
+          "BooleanEquals": true,
+          "Next": "AggregateMetrics"
+        }
+      ],
+      "Default": "ModelRejected"
+    },
+    "AggregateMetrics": {
+      "Type": "Task",
+      "Comment": "State 10 — Lambda. Computes KPIs from inference output. Energia: MAPE, forecast vs actual. Telecom: anomaly rate, top-10 cells. Writes to RDS (energia) or Athena (telecom).",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName.$": "States.Format('arn:aws:lambda:eu-west-1:<ACCOUNT_ID>:function:tfm-{}-aggregate-metrics', $$.Execution.Input.sector)",
+        "Payload": {
+          "sector.$": "$$.Execution.Input.sector",
+          "runtime.$": "$.config.runtime",
+          "analytics_source.$": "$.config.analytics_source",
+          "storage.$": "$.config.storage",
+          "bucket.$": "$.config.bucket"
+        }
+      },
+      "ResultSelector": {
+        "kpi_summary.$": "$.Payload.kpi_summary",
+        "ml_results.$": "$.Payload.ml_results",
+        "historico.$": "$.Payload.historico",
+        "alerts.$": "$.Payload.alerts",
+        "forecast.$": "$.Payload.forecast",
+        "anticipation.$": "$.Payload.anticipation"
+      },
+      "ResultPath": "$.metrics",
+      "Next": "UpdateDashboard",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "PipelineFailed"
+        }
+      ]
+    },
+    "UpdateDashboard": {
+      "Type": "Task",
+      "Comment": "State 11 — Lambda. Refreshes QuickSight SPICE dataset with new KPIs. Energia: consumption KPIs. Telecom: heatmap of 10,000 Milan cells.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName.$": "States.Format('arn:aws:lambda:eu-west-1:<ACCOUNT_ID>:function:tfm-{}-update-dashboard', $$.Execution.Input.sector)",
+        "Payload": {
+          "sector.$": "$$.Execution.Input.sector",
+          "dashboard.$": "$.config.dashboard",
+          "runtime.$": "$.config.runtime",
+          "kpi_summary.$": "$.metrics.kpi_summary",
+          "alerts.$": "$.metrics.alerts"
+        }
+      },
+      "ResultSelector": {
+        "status.$": "$.Payload.status"
+      },
+      "ResultPath": "$.dashboard_result",
+      "Next": "GenerateNarrative",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "PipelineFailed"
+        }
+      ]
+    },
+    "GenerateNarrative": {
+      "Type": "Task",
+      "Comment": "State 12 — Lambda. Calls Amazon Bedrock Nova Pro EU (eu.amazon.nova-pro-v1:0). Generates 5-section executive report in Spanish tailored to the stakeholder in YAML.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName.$": "States.Format('arn:aws:lambda:eu-west-1:<ACCOUNT_ID>:function:tfm-{}-generate-narrative', $$.Execution.Input.sector)",
+        "Payload": {
+          "sector.$": "$$.Execution.Input.sector",
+          "ml_results.$": "$.metrics.ml_results",
+          "kpi_summary.$": "$.metrics.kpi_summary",
+          "historico.$": "$.metrics.historico",
+          "alerts.$": "$.metrics.alerts",
+          "forecast.$": "$.metrics.forecast",
+          "reporting.$": "$.config.reporting",
+          "prompt_template.$": "$.config.executive_reporting.prompt_template"
+        }
+      },
+      "ResultSelector": {
+        "narrative.$": "$.Payload.narrative",
+        "model_used.$": "$.Payload.model_used"
+      },
+      "ResultPath": "$.report",
+      "Next": "GeneratePDF",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "PipelineFailed"
+        }
+      ]
+    },
+    "GeneratePDF": {
+      "Type": "Task",
+      "Comment": "State 13 — Lambda. Converts narrative + KPIs into a PDF using WeasyPrint. Includes charts and tables. Saves to S3 reports/ prefix.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName.$": "States.Format('arn:aws:lambda:eu-west-1:<ACCOUNT_ID>:function:tfm-{}-generate-pdf', $$.Execution.Input.sector)",
+        "Payload": {
+          "sector.$": "$$.Execution.Input.sector",
+          "narrative.$": "$.report.narrative",
+          "kpi_summary.$": "$.metrics.kpi_summary",
+          "ml_results.$": "$.metrics.ml_results",
+          "historico.$": "$.metrics.historico",
+          "alerts.$": "$.metrics.alerts",
+          "reporting.$": "$.config.reporting",
+          "runtime.$": "$.config.runtime"
+        }
+      },
+      "ResultSelector": {
+        "status.$": "$.Payload.status",
+        "pdf_key.$": "$.Payload.pdf_key"
+      },
+      "ResultPath": "$.pdf_result",
+      "Next": "SendReport",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "PipelineFailed"
+        }
+      ]
+    },
+    "SendReport": {
+      "Type": "Task",
+      "Comment": "State 14 — Lambda. Sends the PDF via Amazon SES to the recipients listed in the YAML. Final state of the pipeline.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName.$": "States.Format('arn:aws:lambda:eu-west-1:<ACCOUNT_ID>:function:tfm-{}-send-report', $$.Execution.Input.sector)",
+        "Payload": {
+          "sector.$": "$$.Execution.Input.sector",
+          "pdf_key.$": "$.pdf_result.pdf_key",
+          "recipients.$": "$.config.reporting.recipients",
+          "sender.$": "$.config.reporting.sender",
+          "stakeholder.$": "$.config.reporting.stakeholder",
+          "runtime.$": "$.config.runtime"
+        }
+      },
+      "ResultSelector": {
+        "status.$": "$.Payload.status",
+        "recipient.$": "$.Payload.recipient"
+      },
+      "ResultPath": "$.delivery",
+      "Next": "PipelineSuccess",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "PipelineFailed"
+        }
+      ]
+    },
+    "PipelineSuccess": {
+      "Type": "Succeed",
+      "Comment": "Terminal state — pipeline completed successfully. All 14 workflow states passed."
+    },
+    "ModelRejected": {
+      "Type": "Fail",
+      "Comment": "Terminal state — model did not meet quality threshold (EvalGate). Energia: MAPE >= 15%. Telecom: Recall <= 0.80. Pipeline stops to prevent deploying a bad model.",
+      "Error": "ModelQualityError",
+      "Cause": "Model rejected by EvalGate: performance below threshold defined in YAML."
+    },
+    "PipelineFailed": {
+      "Type": "Fail",
+      "Comment": "Terminal state — unexpected error in pipeline. Check CloudWatch Logs in eu-west-1 for details.",
+      "Error": "PipelineError",
+      "Cause": "One or more states failed. Check CloudWatch Logs in eu-west-1."
+    },
+    "InferenceRouter": {
+      "Type": "Choice",
+      "Comment": "State 9 — Choice. Motor de inferencia segun YAML (ml.inference_engine). telecom=glue (Spark, 60M filas), energia=sagemaker.",
+      "Choices": [
+        {
+          "Variable": "$.config.ml.inference_engine",
+          "StringEquals": "glue",
+          "Next": "GlueScore"
+        }
+      ],
+      "Default": "SageMakerTransform"
+    },
+    "GlueScore": {
+      "Type": "Task",
+      "Comment": "State 9a — Inferencia REAL. Glue lanza score_{sector}.py que puntua con el modelo entrenado y escribe ml/scores/periodo=.../",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName.$": "States.Format('score_{}', $$.Execution.Input.sector)",
+        "Arguments": {
+          "--config.$": "States.Format('s3://tfm-config-ckm-ew1/config/sector_{}_declarative.yaml', $$.Execution.Input.sector)"
+        }
+      },
+      "ResultPath": "$.batch_output",
+      "Next": "AggregateMetrics",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Glue.ConcurrentRunsExceededException"
+          ],
+          "IntervalSeconds": 30,
+          "MaxAttempts": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "PipelineFailed",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    "SageMakerTransform": {
+      "Type": "Pass",
+      "Comment": "State 9b — STUB SageMaker transform (energia). Convertir a arn:aws:states:::sagemaker:createTransformJob.sync al cablear energia.",
+      "Result": {
+        "TransformJobStatus": "Completed",
+        "note": "stub pendiente energia"
+      },
+      "ResultPath": "$.batch_output",
+      "Next": "AggregateMetrics"
+    }
+  }
+}

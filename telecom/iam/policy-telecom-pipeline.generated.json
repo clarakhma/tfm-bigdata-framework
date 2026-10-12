@@ -1,0 +1,117 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "S3ConfigReadOnly",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::tfm-config-ckm-ew1",
+        "arn:aws:s3:::tfm-config-ckm-ew1/*"
+      ]
+    },
+    {
+      "Sid": "S3SectorReadWrite",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::tfm-telecom-ckm-ew1",
+        "arn:aws:s3:::tfm-telecom-ckm-ew1/*"
+      ]
+    },
+    {
+      "Sid": "BedrockEUInferenceProfile",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:InvokeModel"
+      ],
+      "Resource": [
+        "arn:aws:bedrock:eu-west-1:<ACCOUNT_ID>:inference-profile/eu.amazon.nova-pro-v1:0",
+        "arn:aws:bedrock:*::foundation-model/amazon.nova-pro-v1:0"
+      ]
+    },
+    {
+      "Sid": "SESEmail",
+      "Effect": "Allow",
+      "Action": [
+        "ses:SendEmail",
+        "ses:SendRawEmail"
+      ],
+      "Resource": "arn:aws:ses:eu-west-1:<ACCOUNT_ID>:identity/*"
+    },
+    {
+      "Sid": "CloudWatchLogs",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:eu-west-1:<ACCOUNT_ID>:log-group:/aws/lambda/tfm-*"
+    },
+    {
+      "Sid": "AthenaQueryExecution",
+      "Effect": "Allow",
+      "Action": [
+        "athena:StartQueryExecution",
+        "athena:GetQueryExecution",
+        "athena:GetQueryResults",
+        "athena:StopQueryExecution",
+        "athena:GetWorkGroup"
+      ],
+      "Resource": "arn:aws:athena:eu-west-1:<ACCOUNT_ID>:workgroup/primary"
+    },
+    {
+      "Sid": "GlueCatalogForAthena",
+      "Effect": "Allow",
+      "Action": [
+        "glue:GetDatabase",
+        "glue:GetTable",
+        "glue:GetTables",
+        "glue:GetPartition",
+        "glue:GetPartitions"
+      ],
+      "Resource": [
+        "arn:aws:glue:eu-west-1:<ACCOUNT_ID>:catalog",
+        "arn:aws:glue:eu-west-1:<ACCOUNT_ID>:database/telecom_db",
+        "arn:aws:glue:eu-west-1:<ACCOUNT_ID>:table/telecom_db/*"
+      ]
+    },
+    {
+      "Sid": "AthenaResultsS3",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetBucketLocation",
+        "s3:ListBucket",
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:AbortMultipartUpload",
+        "s3:ListMultipartUploadParts"
+      ],
+      "Resource": [
+        "arn:aws:s3:::tfm-telecom-ckm-ew1",
+        "arn:aws:s3:::tfm-telecom-ckm-ew1/*"
+      ]
+    },
+    {
+      "Sid": "QuickSightSpiceRefresh",
+      "Effect": "Allow",
+      "Action": [
+        "quicksight:CreateIngestion",
+        "quicksight:DescribeIngestion",
+        "quicksight:DescribeDataSet"
+      ],
+      "Resource": [
+        "arn:aws:quicksight:eu-west-1:<ACCOUNT_ID>:dataset/<QUICKSIGHT_DATASET_ID>",
+        "arn:aws:quicksight:eu-west-1:<ACCOUNT_ID>:dataset/<QUICKSIGHT_DATASET_ID>/ingestion/*"
+      ]
+    }
+  ]
+}
